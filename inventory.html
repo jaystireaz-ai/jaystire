@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jay's Tire Shop - New Tire Inventory</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="config.js"></script>
+    <script src="admin.js"></script>
+</head>
+<body data-admin-gate>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const API_URL = window.JTS_API_URL;
+
+        const TIRE_BRANDS = ["Achilles","Americus","Armstrong","BFGoodrich","Bridgestone","Continental","Cooper","Cosmo","Crosswind","Delinte","Dunlop","Falken","Federal","Firestone","General","Goodyear","GT Radial","Hankook","Hercules","Kelly","Kumho","Lexani","Lionhart","Mastercraft","Maxxis","Michelin","Nitto","Nokian","Nexen","Pirelli","Primewell","Radar","Sailun","Sumitomo","Sunfull","Toyo","Uniroyal","Venom Power","Westlake","Yokohama","Zenna"].sort();
+        const TIRE_SIZES = ["155/60/17","205/40/17","205/40/18","215/40/17","215/40/18","215/45/17","215/45/18","215/50/17","215/50/18","215/55/17","215/55/18","215/60/17","215/65/17","225/45/17","225/45/18","225/50/17","225/50/18","225/55/17","225/55/18","225/60/17","225/60/18","225/65/17","235/40/18","235/45/18","235/50/17","235/50/18","235/55/17","235/55/18","235/60/17","235/60/18","235/65/17","235/65/18","235/85/17","245/40/17","245/40/18","245/45/18","245/55/18","245/60/18","245/65/17","245/70/17","245/75/17","245/80/17","255/55/18","255/65/17","255/65/18","255/70/17","265/40/18","265/60/17","265/60/18","265/65/17","265/65/18","265/70/17","265/70/18","275/65/18","275/70/18","285/65/17","285/70/17","285/75/18"].sort();
+        const STORE_NAMES = { '1': 'Store #1 — 2932 N 16th St', '2': 'Store #2 — 2347 E Osborn Rd', '3': 'Store #3 — 430 N 16th St' };
+        const EMPLOYEES = ['Jay', 'Noe', 'Felipe', 'Chuy', 'Pedro'];
+        const STORE_LABELS_ES = { '1': 'Tire Shop #1', '2': 'Tire Shop #2', '3': 'Tire Shop #3' };
+
+        const EMPLOYEE_MODE = window.location.hash === '#employee';
+
+        function InventoryApp() {
+            const [tab, setTab] = useState(EMPLOYEE_MODE ? 'employee' : 'stock');
+            const [inventory, setInventory] = useState([]);
+            const [pendingCosts, setPendingCosts] = useState([]);
+            const [filterStore, setFilterStore] = useState('all');
+            const [message, setMessage] = useState(null);
+
+            // Receive form
+            const [recStore, setRecStore] = useState('1');
+            const [recBrand, setRecBrand] = useState('');
+            const [recSize, setRecSize] = useState('');
+            const [recQty, setRecQty] = useState('');
+            const [recCost, setRecCost] = useState('');
+            const [recSalePrice, setRecSalePrice] = useState('');
+
+            // Transfer form
+            const [trFromStore, setTrFromStore] = useState('1');
+            const [trToStore, setTrToStore] = useState('2');
+            const [trBrand, setTrBrand] = useState('');
+            const [trSize, setTrSize] = useState('');
+            const [trQty, setTrQty] = useState('');
+
+            // Weekly count
+            const [weeklyStore, setWeeklyStore] = useState('1');
+            const [weeklyEmployee, setWeeklyEmployee] = useState('');
+            const [weeklyData, setWeeklyData] = useState([]);
+            const [weeklyLoaded, setWeeklyLoaded] = useState(false);
+            const [weeklySubmitting, setWeeklySubmitting] = useState(false);
+
+            // Employee view
+            const [empStore, setEmpStore] = useState('all');
+            const [empSearch, setEmpSearch] = useState('');
+
+            const showMsg = (text, ok = true) => { setMessage({ text, ok }); setTimeout(() => setMessage(null), 4000); };
+
+            const loadInventory = async () => {
+                try {
+                    const res = await fetch(`${API_URL}/inventory`);
+                    const data = await res.json();
+                    if (data.success) setInventory(data.inventory);
+                } catch (e) { console.error(e); }
+            };
+
+            const loadPendingCosts = async () => {
+                try {
+                    const res = await fetch(`${API_URL}/inventory/pending-costs`);
+                    const data = await res.json();
+                    if (data.success) setPendingCosts(data.items.map(i => ({ ...i, inputCost: '' })));
+                } catch (e) { console.error(e); }
+            };
+
+            useEffect(() => { loadInventory(); loadPendingCosts(); }, []);
+
+            const handleReceive = async () => {
+                if (!recBrand || !recSize || !recQty || !recCost) { showMsg('Please fill in all fields.', false); return; }
+                const qty = parseInt(recQty); const cost = parseFloat(recCost);
+                if (isNaN(qty) || qty <= 0 || isNaN(cost) || cost <= 0) { showMsg('Please enter valid quantity and cost.', false); return; }
+                const salePrice = recSalePrice ? parseFloat(recSalePrice) : null;
+                if (recSalePrice && (isNaN(salePrice) || salePrice <= 0)) { showMsg('Please enter a valid sale price.', false); return; }
+                try {
+                    const res = await fetch(`${API_URL}/inventory/receive`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ store_number: parseInt(recStore), brand: recBrand, size: recSize, quantity: qty, cost_per_tire: cost, sale_price: salePrice })
+                    });
+                    const data = await res.json();
+                    if (data.success) { showMsg('Stock added successfully!'); setRecBrand(''); setRecSize(''); setRecQty(''); setRecCost(''); setRecSalePrice(''); loadInventory(); }
+                    else showMsg(data.error, false);
+                } catch (e) { showMsg('Error connecting to server.', false); }
+            };
+
+            const handleTransfer = async () => {
+                if (trFromStore === trToStore) { showMsg('From and To store must be different.', false); return; }
+                if (!trBrand || !trSize || !trQty) { showMsg('Please fill in all fields.', false); return; }
+                const qty = parseInt(trQty);
+                if (isNaN(qty) || qty <= 0) { showMsg('Please enter a valid quantity.', false); return; }
+                try {
+                    const res = await fetch(`${API_URL}/inventory/transfer`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ from_store: parseInt(trFromStore), to_store: parseInt(trToStore), brand: trBrand, size: trSize, quantity: qty })
+                    });
+                    const data = await res.json();
+                    if (data.success) { showMsg('Transfer completed!'); setTrBrand(''); setTrSize(''); setTrQty(''); loadInventory(); }
+                    else showMsg(data.error, false);
+                } catch (e) { showMsg('Error connecting to server.', false); }
+            };
+
+            const handleSaveCost = async (item) => {
+                const cost = parseFloat(item.inputCost);
+                if (isNaN(cost) || cost <= 0) { showMsg('Please enter a valid cost.', false); return; }
+                try {
+                    const res = await fetch(`${API_URL}/inventory/update-cost/${item.id}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cost: cost * item.quantity })
+                    });
+                    const data = await res.json();
+                    if (data.success) { showMsg('Cost saved!'); loadPendingCosts(); }
+                    else showMsg(data.error, false);
+                } catch (e) { showMsg('Error connecting to server.', false); }
+            };
+
+            const loadWeekly = () => {
+                const storeItems = inventory.filter(i => i.store_number === parseInt(weeklyStore));
+                setWeeklyData(storeItems.map(i => ({
+                    ...i,
+                    actualCount: String(i.quantity),
+                    explanation: ''
+                })));
+                setWeeklyLoaded(true);
+            };
+
+            const handleWeeklySubmit = async () => {
+                if (!weeklyEmployee) { showMsg('Please select who is doing the count.', false); return; }
+                const discrepancies = weeklyData.filter(r => {
+                    const actual = parseInt(r.actualCount);
+                    return !isNaN(actual) && actual !== r.quantity;
+                });
+                const missingExplanation = discrepancies.filter(r => !r.explanation.trim());
+                if (missingExplanation.length > 0) {
+                    showMsg(`Please add an explanation for ${missingExplanation.length} discrepancy(ies).`, false);
+                    return;
+                }
+                // Only submit rows that have a valid actual count entered
+                const toSubmit = weeklyData
+                    .filter(r => r.actualCount !== '' && !isNaN(parseInt(r.actualCount)))
+                    .map(r => ({ id: r.id, actual_qty: parseInt(r.actualCount), explanation: r.explanation }));
+
+                if (toSubmit.length === 0) { showMsg('No counts entered.', false); return; }
+                setWeeklySubmitting(true);
+                try {
+                    const res = await fetch(`${API_URL}/inventory/reconcile`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ adjustments: toSubmit, adjusted_by: weeklyEmployee })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showMsg(`Count submitted! ${discrepancies.length} adjustment(s) recorded.`);
+                        setWeeklyLoaded(false); setWeeklyData([]); setWeeklyEmployee('');
+                        loadInventory();
+                    } else showMsg(data.error, false);
+                } catch (e) { showMsg('Error connecting to server.', false); }
+                setWeeklySubmitting(false);
+            };
+
+            const [sortCol, setSortCol] = useState('brand');
+            const [sortDir, setSortDir] = useState('asc');
+
+            const handleSort = (col) => {
+                if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                else { setSortCol(col); setSortDir('asc'); }
+            };
+
+            const filteredInventory = useMemo(() => {
+                const base = filterStore === 'all' ? inventory : inventory.filter(i => i.store_number === parseInt(filterStore));
+                return [...base].sort((a, b) => {
+                    let av = a[sortCol], bv = b[sortCol];
+                    if (av == null) av = sortCol === 'quantity' || sortCol === 'cost_per_tire' || sortCol === 'sale_price' ? -1 : '';
+                    if (bv == null) bv = sortCol === 'quantity' || sortCol === 'cost_per_tire' || sortCol === 'sale_price' ? -1 : '';
+                    if (typeof av === 'string') av = av.toLowerCase();
+                    if (typeof bv === 'string') bv = bv.toLowerCase();
+                    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+                    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }, [inventory, filterStore, sortCol, sortDir]);
+            const totalValue = filteredInventory.reduce((sum, i) => sum + (i.quantity * (i.cost_per_tire || 0)), 0);
+
+            const [showChart, setShowChart] = useState(false);
+            const [chartStores, setChartStores] = useState(['1', '2', '3']);
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            const toggleChartStore = (s) => setChartStores(prev =>
+                prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+            );
+
+            const STORE_COLORS = { '1': '#2563eb', '2': '#f97316', '3': '#16a34a' };
+
+            const chartData = useMemo(() => {
+                const activeInv = inventory.filter(i => chartStores.includes(String(i.store_number)) && i.quantity > 0);
+                const sizes = [...new Set(activeInv.map(i => i.size))];
+                // Sort by total qty descending (highest at top for horizontal chart)
+                sizes.sort((a, b) => {
+                    const qa = inventory.filter(i => i.size === a && chartStores.includes(String(i.store_number))).reduce((s, i) => s + i.quantity, 0);
+                    const qb = inventory.filter(i => i.size === b && chartStores.includes(String(i.store_number))).reduce((s, i) => s + i.quantity, 0);
+                    return qb - qa;
+                });
+                const datasets = chartStores.map(storeNum => ({
+                    label: `Tire Shop #${storeNum}`,
+                    data: sizes.map(size => {
+                        const item = inventory.find(i => String(i.store_number) === storeNum && i.size === size);
+                        return item ? item.quantity : 0;
+                    }),
+                    backgroundColor: STORE_COLORS[storeNum],
+                    borderRadius: 4,
+                    barPercentage: 0.6,
+                    categoryPercentage: 0.7,
+                }));
+                return { labels: sizes, datasets };
+            }, [inventory, chartStores]);
+
+            useEffect(() => {
+                if (!showChart || !chartRef.current) return;
+                if (chartInstance.current) chartInstance.current.destroy();
+                chartInstance.current = new Chart(chartRef.current, {
+                    type: 'bar',
+                    plugins: [ChartDataLabels],
+                    data: chartData,
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        layout: { padding: { right: 32 } },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                                labels: { usePointStyle: true, pointStyle: 'rect', padding: 16, font: { weight: 'bold' } }
+                            },
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'end',
+                                font: { weight: 'bold', size: 11 },
+                                color: ctx => ctx.dataset.backgroundColor,
+                                formatter: v => v > 0 ? v : '',
+                            }
+                        },
+                        scales: {
+                            x: { display: false, grid: { display: false } },
+                            y: { reverse: true, grid: { display: false } }
+                        }
+                    }
+                });
+                return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
+            }, [showChart, chartData]);
+            const transferOptions = inventory.filter(i => i.store_number === parseInt(trFromStore) && i.quantity > 0);
+
+            // Base pool filtered by store (used for datalist options)
+            const empInventoryByStore = inventory.filter(i =>
+                i.quantity > 0 && (empStore === 'all' || i.store_number === parseInt(empStore))
+            );
+            // Further filtered by search text
+            const empInventory = empSearch.trim()
+                ? empInventoryByStore.filter(i => {
+                    const q = empSearch.trim().toLowerCase();
+                    return i.brand.toLowerCase().includes(q) || i.size.toLowerCase().includes(q);
+                  })
+                : empInventoryByStore;
+            // Unique brands and sizes for datalist
+            const empBrandOptions = [...new Set(empInventoryByStore.map(i => i.brand))].sort();
+            const empSizeOptions  = [...new Set(empInventoryByStore.map(i => i.size))].sort();
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-4">
+                    {/* Header */}
+                    <div className="bg-white border-b-4 border-black p-4 mb-4">
+                        <div className="flex justify-between items-center">
+                            {EMPLOYEE_MODE
+                                ? <a href={`pos.html?store=${new URLSearchParams(window.location.search).get('store') || '1'}`} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded">← Regresar</a>
+                                : <a href="index.html" className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded">← Dashboard</a>
+                            }
+                            <div className="flex items-center gap-3">
+                                <div className="w-14 h-14 bg-black rounded-full flex items-center justify-center">
+                                    <span className="text-white font-bold text-lg">JTS</span>
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl font-bold">JAY'S TIRE SHOP</h1>
+                                    <p className="text-gray-600">{EMPLOYEE_MODE ? 'Ver Inventario' : 'New Tire Inventory'}</p>
+                                </div>
+                            </div>
+                            <div className="w-32"></div>
+                        </div>
+                    </div>
+
+                    {/* Message */}
+                    {message && (
+                        <div className={`mb-4 p-3 rounded font-bold text-center ${message.ok ? 'bg-green-100 text-green-800 border-2 border-green-400' : 'bg-red-100 text-red-800 border-2 border-red-400'}`}>
+                            {message.text}
+                        </div>
+                    )}
+
+                    {/* Tabs — hidden in employee mode */}
+                    {!EMPLOYEE_MODE && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {[
+                                ['stock', 'Current Stock'],
+                                ['receive', 'Add Inventory'],
+                                ['transfer', 'Transfer Between Stores'],
+                                ['costs', `Pending Costs${pendingCosts.length > 0 ? ` (${pendingCosts.length})` : ''}`],
+                                ['weekly', 'Weekly Count'],
+                                ['employee', 'Employee View']
+                            ].map(([key, label]) => (
+                                <button key={key} onClick={() => setTab(key)}
+                                    className={`px-4 py-2 rounded font-medium border-2 ${tab === key ? 'bg-black text-white border-black' : 'bg-white border-gray-300 hover:border-gray-500'}`}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* ── CURRENT STOCK ── */}
+                    {tab === 'stock' && (
+                        <div className="bg-white rounded shadow p-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-bold">Current Stock</h2>
+                                <div className="flex items-center gap-3">
+                                    <select value={filterStore} onChange={e => setFilterStore(e.target.value)} className="border-2 border-gray-300 rounded p-2">
+                                        <option value="all">All Stores</option>
+                                        <option value="1">Store #1</option>
+                                        <option value="2">Store #2</option>
+                                        <option value="3">Store #3</option>
+                                    </select>
+                                    <button onClick={() => setTab('receive')} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold">+ Add Inventory</button>
+                                    <button onClick={loadInventory} className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded font-medium">Refresh</button>
+                                </div>
+                            </div>
+
+                            {filteredInventory.length > 0 && (
+                                <div className="mb-4">
+                                    <button onClick={() => setShowChart(v => !v)}
+                                        className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 mb-3">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>
+                                        </svg>
+                                        {showChart ? 'Hide Summary' : 'Show Summary by Size'}
+                                    </button>
+                                    {showChart && (
+                                        <div className="border border-gray-200 rounded-xl p-4 mb-4 bg-gray-50">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Units by Size</p>
+                                                <div className="flex gap-2">
+                                                    {['1','2','3'].map(s => (
+                                                        <button key={s} onClick={() => toggleChartStore(s)}
+                                                            className="px-3 py-1 rounded-full text-xs font-bold border-2 transition-all"
+                                                            style={{
+                                                                borderColor: STORE_COLORS[s],
+                                                                backgroundColor: chartStores.includes(s) ? STORE_COLORS[s] : 'white',
+                                                                color: chartStores.includes(s) ? 'white' : STORE_COLORS[s],
+                                                            }}>
+                                                            Tire Shop #{s}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <canvas ref={chartRef} style={{height: `${Math.max(200, chartData.labels.length * 28 * chartStores.length)}px`}}></canvas>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {filteredInventory.length === 0 ? (
+                                <p className="text-center text-gray-500 py-8">No inventory records found. Click "+ Add Inventory" to add stock.</p>
+                            ) : (
+                                <table className="w-full border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-100 border-b-2 border-black">
+                                            {[['store_number','Store','left'],['brand','Brand','left'],['size','Size','left'],['quantity','Qty','right'],['cost_per_tire','Cost / Tire','right'],['sale_price','Sale Price','right']].map(([col, label, align]) => (
+                                                <th key={col} onClick={() => handleSort(col)}
+                                                    className={`p-2 text-${align} cursor-pointer select-none hover:bg-gray-200`}>
+                                                    {label} {sortCol === col ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredInventory.map(item => (
+                                            <tr key={item.id} className={`border-b border-gray-200 ${item.quantity === 0 ? 'text-gray-400' : ''}`}>
+                                                <td className="p-2">Store #{item.store_number}</td>
+                                                <td className="p-2 font-medium">{item.brand}</td>
+                                                <td className="p-2">{item.size}</td>
+                                                <td className={`p-2 text-right font-bold ${item.quantity === 0 ? 'text-red-500' : ''}`}>{item.quantity}</td>
+                                                <td className="p-2 text-right">{item.cost_per_tire ? `$${item.cost_per_tire.toFixed(2)}` : '—'}</td>
+                                                <td className="p-2 text-right font-semibold text-green-700">{item.sale_price ? `$${item.sale_price.toFixed(2)}` : '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── RECEIVE TIRES ── */}
+                    {tab === 'receive' && (
+                        <div className="bg-white rounded shadow p-6 max-w-lg">
+                            <h2 className="text-xl font-bold mb-4">Receive New Tire Stock</h2>
+                            <p className="text-sm text-gray-500 mb-4">Use this when you purchase tires to add to store inventory.</p>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block font-medium mb-1">Store</label>
+                                    <select value={recStore} onChange={e => setRecStore(e.target.value)} className="border-2 border-gray-300 rounded p-2 w-full">
+                                        <option value="1">Store #1 — 2932 N 16th St</option>
+                                        <option value="2">Store #2 — 2347 E Osborn Rd</option>
+                                        <option value="3">Store #3 — 430 N 16th St</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block font-medium mb-1">Brand</label>
+                                    <input type="text" list="inv-brands" placeholder="Type to search..." value={recBrand} onChange={e => setRecBrand(e.target.value)}
+                                        className="border-2 border-gray-300 rounded p-2 w-full" />
+                                    <datalist id="inv-brands">{TIRE_BRANDS.map(b => <option key={b} value={b} />)}</datalist>
+                                </div>
+                                <div>
+                                    <label className="block font-medium mb-1">Size</label>
+                                    <input type="text" list="inv-sizes" placeholder="Type to search..." value={recSize} onChange={e => setRecSize(e.target.value)}
+                                        className="border-2 border-gray-300 rounded p-2 w-full" />
+                                    <datalist id="inv-sizes">{TIRE_SIZES.map(s => <option key={s} value={s} />)}</datalist>
+                                </div>
+                                <div>
+                                    <label className="block font-medium mb-1">Quantity</label>
+                                    <input type="number" min="1" placeholder="0" value={recQty} onChange={e => setRecQty(e.target.value)}
+                                        className="border-2 border-gray-300 rounded p-2 w-full" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block font-medium mb-1">Cost Per Tire ($)</label>
+                                        <input type="number" step="0.01" min="0" placeholder="0.00" value={recCost} onChange={e => setRecCost(e.target.value)}
+                                            className="border-2 border-gray-300 rounded p-2 w-full" />
+                                    </div>
+                                    <div>
+                                        <label className="block font-medium mb-1">Sale Price ($)</label>
+                                        <input type="number" step="0.01" min="0" placeholder="0.00" value={recSalePrice} onChange={e => setRecSalePrice(e.target.value)}
+                                            className="border-2 border-green-400 rounded p-2 w-full" />
+                                    </div>
+                                </div>
+                                {recBrand && recSize && recQty && recCost && (
+                                    <div className="p-3 bg-gray-50 border rounded text-sm text-gray-700">
+                                        Adding <strong>{recQty} × {recBrand} {recSize}</strong> to Store #{recStore} at <strong>${recCost}/tire</strong>
+                                        {recSalePrice && <> — sell for <strong className="text-green-700">${recSalePrice}</strong></>}
+                                        {' '}(Total cost: <strong>${(parseFloat(recQty||0) * parseFloat(recCost||0)).toFixed(2)}</strong>)
+                                    </div>
+                                )}
+                                <button onClick={handleReceive} className="w-full bg-black text-white font-bold py-3 rounded hover:bg-gray-800 text-lg">
+                                    Add to Inventory
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── TRANSFER ── */}
+                    {tab === 'transfer' && (
+                        <div className="bg-white rounded shadow p-6 max-w-lg">
+                            <h2 className="text-xl font-bold mb-4">Transfer Tires Between Stores</h2>
+                            <p className="text-sm text-gray-500 mb-4">Moves tires from one store's inventory to another. Cost and sale price transfer with the tires.</p>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block font-medium mb-1">From Store</label>
+                                        <select value={trFromStore} onChange={e => { setTrFromStore(e.target.value); setTrBrand(''); setTrSize(''); }}
+                                            className="border-2 border-gray-300 rounded p-2 w-full">
+                                            <option value="1">Store #1</option>
+                                            <option value="2">Store #2</option>
+                                            <option value="3">Store #3</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block font-medium mb-1">To Store</label>
+                                        <select value={trToStore} onChange={e => setTrToStore(e.target.value)}
+                                            className="border-2 border-gray-300 rounded p-2 w-full">
+                                            <option value="1">Store #1</option>
+                                            <option value="2">Store #2</option>
+                                            <option value="3">Store #3</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block font-medium mb-1">Tire (Brand &amp; Size)</label>
+                                    {transferOptions.length === 0 ? (
+                                        <p className="text-sm text-gray-500 p-2 border rounded bg-gray-50">No stock available in Store #{trFromStore}.</p>
+                                    ) : (
+                                        <select value={`${trBrand}||${trSize}`} onChange={e => { const [b, s] = e.target.value.split('||'); setTrBrand(b); setTrSize(s); }}
+                                            className="border-2 border-gray-300 rounded p-2 w-full">
+                                            <option value="||">— Select tire —</option>
+                                            {transferOptions.map(i => (
+                                                <option key={i.id} value={`${i.brand}||${i.size}`}>
+                                                    {i.brand} {i.size} — {i.quantity} available
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block font-medium mb-1">Quantity to Transfer</label>
+                                    <input type="number" min="1" placeholder="0" value={trQty} onChange={e => setTrQty(e.target.value)}
+                                        className="border-2 border-gray-300 rounded p-2 w-full" />
+                                    {trBrand && trSize && (() => {
+                                        const src = transferOptions.find(i => i.brand === trBrand && i.size === trSize);
+                                        return src ? <p className="text-xs text-gray-500 mt-1">Available: {src.quantity} tires at ${src.cost_per_tire?.toFixed(2)}/tire{src.sale_price ? ` · Sale price: $${src.sale_price.toFixed(2)}` : ''}</p> : null;
+                                    })()}
+                                </div>
+
+                                {trBrand && trSize && trQty && trFromStore !== trToStore && (
+                                    <div className="p-3 bg-gray-50 border rounded text-sm text-gray-700">
+                                        Moving <strong>{trQty} × {trBrand} {trSize}</strong> from Store #{trFromStore} → Store #{trToStore}
+                                    </div>
+                                )}
+                                <button onClick={handleTransfer} className="w-full bg-black text-white font-bold py-3 rounded hover:bg-gray-800 text-lg">
+                                    Complete Transfer
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── PENDING COSTS ── */}
+                    {tab === 'costs' && (
+                        <div className="bg-white rounded shadow p-4">
+                            <h2 className="text-xl font-bold mb-1">Pending Costs — Special Order Sales</h2>
+                            <p className="text-sm text-gray-500 mb-4">These are new tires sold as special orders. Enter the cost per tire so your records are complete.</p>
+                            {pendingCosts.length === 0 ? (
+                                <p className="text-center text-gray-500 py-8">No pending costs. All special order sales have costs recorded.</p>
+                            ) : (
+                                <table className="w-full border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-gray-100 border-b-2 border-black">
+                                            <th className="text-left p-2">Date</th>
+                                            <th className="text-left p-2">Receipt</th>
+                                            <th className="text-left p-2">Store</th>
+                                            <th className="text-left p-2">Tire</th>
+                                            <th className="text-right p-2">Qty</th>
+                                            <th className="text-right p-2">Sold For</th>
+                                            <th className="text-right p-2">Cost / Tire</th>
+                                            <th className="p-2"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pendingCosts.map((item, idx) => (
+                                            <tr key={item.id} className="border-b border-gray-200">
+                                                <td className="p-2">{item.transaction_date}</td>
+                                                <td className="p-2 font-mono text-xs">{item.receipt_number}</td>
+                                                <td className="p-2">#{item.store_number}</td>
+                                                <td className="p-2">{item.description || `${item.brand || ''} ${item.tire_size || ''}`}</td>
+                                                <td className="p-2 text-right">{item.quantity}</td>
+                                                <td className="p-2 text-right">${item.unit_price?.toFixed(2)}</td>
+                                                <td className="p-2">
+                                                    <input type="number" step="0.01" min="0" placeholder="0.00"
+                                                        value={item.inputCost}
+                                                        onChange={e => setPendingCosts(pendingCosts.map((p, i) => i === idx ? { ...p, inputCost: e.target.value } : p))}
+                                                        className="border-2 border-gray-300 rounded p-1 w-24 text-right" />
+                                                </td>
+                                                <td className="p-2">
+                                                    <button onClick={() => handleSaveCost(item)}
+                                                        className="bg-black text-white px-3 py-1 rounded font-medium text-sm hover:bg-gray-800">
+                                                        Save
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── WEEKLY COUNT ── */}
+                    {tab === 'weekly' && (
+                        <div className="bg-white rounded shadow p-4">
+                            <h2 className="text-xl font-bold mb-1">Weekly Inventory Count</h2>
+                            <p className="text-sm text-gray-500 mb-4">Compare system counts to your physical count. Any discrepancies require an explanation.</p>
+
+                            {!weeklyLoaded ? (
+                                <div className="max-w-sm space-y-4">
+                                    <div>
+                                        <label className="block font-medium mb-1">Who is doing the count?</label>
+                                        <select value={weeklyEmployee} onChange={e => setWeeklyEmployee(e.target.value)} className="border-2 border-gray-300 rounded p-2 w-full">
+                                            <option value="">— Select employee —</option>
+                                            {EMPLOYEES.map(n => <option key={n} value={n}>{n}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block font-medium mb-1">Store</label>
+                                        <select value={weeklyStore} onChange={e => setWeeklyStore(e.target.value)} className="border-2 border-gray-300 rounded p-2 w-full">
+                                            <option value="1">Store #1 — 2932 N 16th St</option>
+                                            <option value="2">Store #2 — 2347 E Osborn Rd</option>
+                                            <option value="3">Store #3 — 430 N 16th St</option>
+                                        </select>
+                                    </div>
+                                    <button onClick={loadWeekly} disabled={!weeklyEmployee}
+                                        className="w-full bg-black text-white font-bold py-3 rounded hover:bg-gray-800 text-lg disabled:opacity-50">
+                                        Start Count →
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <div>
+                                            <span className="font-semibold">Store #{weeklyStore}</span>
+                                            <span className="text-gray-500 ml-2">· {weeklyEmployee}</span>
+                                        </div>
+                                        <button onClick={() => { setWeeklyLoaded(false); setWeeklyData([]); setWeeklyEmployee(''); }}
+                                            className="text-sm text-gray-500 underline">Start Over</button>
+                                    </div>
+
+                                    {weeklyData.length === 0 ? (
+                                        <p className="text-gray-500 py-8 text-center">No inventory in Store #{weeklyStore}.</p>
+                                    ) : (
+                                        <>
+                                            <table className="w-full border-collapse text-sm mb-4">
+                                                <thead>
+                                                    <tr className="bg-gray-100 border-b-2 border-black">
+                                                        <th className="text-left p-2">Brand</th>
+                                                        <th className="text-left p-2">Size</th>
+                                                        <th className="text-right p-2">System Qty</th>
+                                                        <th className="text-right p-2">Physical Count</th>
+                                                        <th className="text-right p-2">Diff</th>
+                                                        <th className="text-left p-2">Explanation</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {weeklyData.map((row, idx) => {
+                                                        const actual = parseInt(row.actualCount);
+                                                        const diff = !isNaN(actual) ? actual - row.quantity : null;
+                                                        const hasDiscrepancy = diff !== null && diff !== 0;
+                                                        return (
+                                                            <tr key={row.id} className={`border-b border-gray-200 ${hasDiscrepancy ? 'bg-yellow-50' : ''}`}>
+                                                                <td className="p-2 font-medium">{row.brand}</td>
+                                                                <td className="p-2">{row.size}</td>
+                                                                <td className="p-2 text-right font-bold">{row.quantity}</td>
+                                                                <td className="p-2 text-right">
+                                                                    <input type="number" min="0" placeholder={row.quantity}
+                                                                        value={row.actualCount}
+                                                                        onChange={e => setWeeklyData(weeklyData.map((r, i) => i === idx ? { ...r, actualCount: e.target.value } : r))}
+                                                                        className={`border-2 rounded p-1 w-20 text-right ${hasDiscrepancy ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300'}`} />
+                                                                </td>
+                                                                <td className={`p-2 text-right font-bold ${diff === null ? '' : diff === 0 ? 'text-green-600' : diff > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                                                    {diff === null ? '—' : diff === 0 ? '✓' : diff > 0 ? `+${diff}` : diff}
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    {hasDiscrepancy && (
+                                                                        <input type="text" placeholder="Required explanation..."
+                                                                            value={row.explanation}
+                                                                            onChange={e => setWeeklyData(weeklyData.map((r, i) => i === idx ? { ...r, explanation: e.target.value } : r))}
+                                                                            className="border-2 border-yellow-500 rounded p-1 w-full text-sm" />
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                            <button onClick={handleWeeklySubmit} disabled={weeklySubmitting}
+                                                className="bg-black text-white font-bold px-8 py-3 rounded hover:bg-gray-800 text-lg disabled:opacity-50">
+                                                {weeklySubmitting ? 'Submitting...' : 'Submit Count'}
+                                            </button>
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ── EMPLOYEE VIEW (SPANISH) ── */}
+                    {tab === 'employee' && (
+                        <div>
+                            {/* Inventory view — Spanish, large cards, no employee selection needed */}
+                            <div>
+                                    <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
+                                        <div>
+                                            <h2 className="text-2xl font-bold">Inventario disponible</h2>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <select value={empStore} onChange={e => setEmpStore(e.target.value)}
+                                                className="border-2 border-gray-300 rounded p-2 font-medium">
+                                                <option value="all">Todas las tiendas</option>
+                                                <option value="1">Tire Shop #1</option>
+                                                <option value="2">Tire Shop #2</option>
+                                                <option value="3">Tire Shop #3</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    {/* Search bar */}
+                                    <div className="mb-4 flex gap-2">
+                                        <input
+                                            type="text"
+                                            list="emp-search-options"
+                                            placeholder="🔍 Buscar por marca o medida..."
+                                            value={empSearch}
+                                            onChange={e => setEmpSearch(e.target.value)}
+                                            className="border-2 border-gray-300 rounded-xl p-3 flex-1 text-lg focus:border-black focus:outline-none"
+                                        />
+                                        <datalist id="emp-search-options">
+                                            {empBrandOptions.map(b => <option key={`b-${b}`} value={b} />)}
+                                            {empSizeOptions.map(s => <option key={`s-${s}`} value={s} />)}
+                                        </datalist>
+                                        {empSearch && (
+                                            <button onClick={() => setEmpSearch('')}
+                                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-xl text-lg font-bold text-gray-600">
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {empInventory.length === 0 ? (
+                                        <div className="bg-white rounded-xl shadow p-8 text-center">
+                                            {empSearch.trim() ? (
+                                                <>
+                                                    <p className="text-2xl font-bold text-red-500 mb-2">❌ No disponible</p>
+                                                    <p className="text-gray-500">No hay llantas de <strong>"{empSearch}"</strong> en inventario.</p>
+                                                    <button onClick={() => setEmpSearch('')} className="mt-4 px-4 py-2 bg-black text-white rounded-lg font-medium">Ver todo</button>
+                                                </>
+                                            ) : (
+                                                <p className="text-gray-400 text-xl">No hay inventario disponible.</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {empInventory.map(item => (
+                                                <div key={item.id} className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-5">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <span className="bg-black text-white text-xs font-bold px-2 py-1 rounded">
+                                                            {STORE_LABELS_ES[String(item.store_number)]}
+                                                        </span>
+                                                        <span className={`text-3xl font-black ${item.quantity <= 2 ? 'text-red-600' : 'text-gray-800'}`}>
+                                                            {item.quantity}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xl font-bold text-gray-800 leading-tight">{item.brand}</p>
+                                                    <p className="text-lg text-gray-600 font-mono mb-3">{item.size}</p>
+                                                    <div className="border-t-2 border-gray-100 pt-3">
+                                                        {item.sale_price ? (
+                                                            <p className="text-3xl font-black text-green-600">${item.sale_price.toFixed(2)}</p>
+                                                        ) : (
+                                                            <p className="text-lg text-gray-400 italic">Precio no asignado</p>
+                                                        )}
+                                                        <p className="text-xs text-gray-400 mt-1">{item.quantity <= 2 ? '⚠ Pocas unidades' : 'En existencia'}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<InventoryApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

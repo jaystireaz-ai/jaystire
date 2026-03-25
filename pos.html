@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jay's Tire Shop - POS System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        const API_URL = window.JTS_API_URL;
+
+        // Get store number from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialStore = urlParams.get('store') || '1';
+        
+        const TIRE_BRANDS = ["Achilles","Americus","Armstrong","BFGoodrich","Bridgestone","Continental","Cooper","Cosmo","Crosswind","Delinte","Dunlop","Falken","Federal","Firestone","General","Goodyear","GT Radial","Hankook","Hercules","Kelly","Kumho","Lexani","Lionhart","Mastercraft","Maxxis","Michelin","Nitto","Nokian","Nexen","Pirelli","Primewell","Radar","Sailun","Sumitomo","Sunfull","Toyo","Uniroyal","Venom Power","Westlake","Yokohama","Zenna"].sort();
+
+        const TIRE_SIZES = ["155/60/17","205/40/17","205/40/18","215/40/17","215/40/18","215/45/17","215/45/18","215/50/17","215/50/18","215/55/17","215/55/18","215/60/17","215/65/17","225/45/17","225/45/18","225/50/17","225/50/18","225/55/17","225/55/18","225/60/17","225/60/18","225/65/17","235/40/18","235/45/18","235/50/17","235/50/18","235/55/17","235/55/18","235/60/17","235/60/18","235/65/17","235/65/18","235/85/17","245/40/17","245/40/18","245/45/18","245/55/18","245/60/18","245/65/17","245/70/17","245/75/17","245/80/17","255/55/18","255/65/17","255/65/18","255/70/17","265/40/18","265/60/17","265/60/18","265/65/17","265/65/18","265/70/17","265/70/18","275/65/18","275/70/18","285/65/17","285/70/17","285/75/18"].sort();
+        
+        const VEHICLE_MAKES = ["Acura","Audi","BMW","Buick","Cadillac","Chevrolet","Chrysler","Dodge","Ford","GMC","Honda","Hyundai","Infiniti","Jeep","Kia","Lexus","Lincoln","Mazda","Mercedes-Benz","Mitsubishi","Nissan","Ram","Subaru","Tesla","Toyota","Volkswagen","Volvo"].sort();
+        
+        const VEHICLE_YEARS = Array.from({ length: 37 }, (_, i) => (2026 - i).toString());
+        
+        const XIcon = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        );
+        
+        const EMPLOYEES = ['Jay', 'Noe', 'Felipe', 'Chuy', 'Pedro'];
+
+        const STRINGS = {
+            en: {
+                back_dashboard: '← Back to Dashboard', switch_employee: 'Switch Employee', pos_subtitle: 'Point of Sale System',
+                vehicle_info: 'Customer Vehicle Information', make: 'Make', model: 'Model', year: 'Year', license_plate: 'License Plate',
+                internal_notes: 'Internal Notes (Not printed on receipt)',
+                tire_positions: 'Select Tire Positions Serviced:', tire_positions_hint: 'Click the tire positions that were serviced',
+                add_tires: 'Add Tires', select_condition: 'SELECT TIRE CONDITION:', used: 'USED', new_tire: 'NEW',
+                tire_size: 'Tire Size', price: 'Price ($)', quantity: 'Quantity', add_tire: 'Add Tire',
+                new_tire_popup_hint: 'NEW tire details entered via popup', add_another_new: 'Tap here to add another new tire',
+                add_services: 'Add Services', repairs: 'Repairs', alignment: 'Alignment', suspension: 'Suspension Work', brakes: 'Brakes',
+                other_service: 'Other Service', service_name: 'Service name', add_other: 'Add Other Service',
+                current_sale: 'Current Sale', no_items: 'No items added yet',
+                subtotal: 'SUBTOTAL:', tax_note: 'Tax (8.6%) applied to card payments at checkout', complete_sale: 'Complete Sale →',
+                remaining: 'Remaining balance', collected: 'Collected:', select_method: 'Select payment method:',
+                cash: 'Cash', p2p: 'P2P', p2p_sub: 'Zelle / Venmo / CashApp', card: 'Card',
+                cancel: 'Cancel', back: '← Back', amount_due: 'Amount due (no tax):', change_due: 'Change due:',
+                complete_sale_check: 'Complete Sale ✓', add_to_payment: 'Add to Payment →',
+                card_terminal: 'Card Terminal', remaining_balance: 'Remaining balance:', plus_tax: '+ tax (8.6%) =',
+                terminal_ref: 'Terminal Reference #', enter_ref: 'Enter reference code', complete: 'Complete Sale',
+                review_sign: 'Please Review Your Purchase & Sign Below',
+                all_final: '*** ALL SALES ARE FINAL ***', customer_sig: 'Customer Signature:', sig_clear: 'Clear',
+                sig_back: 'Back', accept_complete: 'Accept & Complete Sale',
+                new_tire_source: 'NEW Tire — Source', source_hint: 'Where is this tire coming from?',
+                from_stock: 'From Stock', from_warehouse: 'From Warehouse', brand: 'Brand',
+                sale_complete: 'SALE COMPLETE!', reprint: 'Reprint Receipt', close: 'Close',
+                employees_label: 'Employees:', lang_toggle: 'ES', add: 'Add',
+                training_toggle: 'Training Mode', training_banner: '⚠️ TRAINING MODE — Enter invoice # from paper invoice',
+                invoice_prompt: 'Enter Invoice # from paper invoice', invoice_placeholder: 'e.g. 1-032525-001',
+                invoice_confirm: 'Continue →', invoice_cancel: 'Cancel',
+            },
+            es: {
+                back_dashboard: '← Volver al Menú', switch_employee: 'Cambiar Empleado', pos_subtitle: 'Sistema de Venta',
+                vehicle_info: 'Información del Vehículo', make: 'Marca', model: 'Modelo', year: 'Año', license_plate: 'Placa',
+                internal_notes: 'Notas Internas (No se imprimen en el recibo)',
+                tire_positions: 'Posiciones de Llantas Atendidas:', tire_positions_hint: 'Selecciona las posiciones que se atendieron',
+                add_tires: 'Agregar Llantas', select_condition: 'SELECCIONA EL TIPO DE LLANTA:', used: 'USADA', new_tire: 'NUEVA',
+                tire_size: 'Medida de Llanta', price: 'Precio ($)', quantity: 'Cantidad', add_tire: 'Agregar Llanta',
+                new_tire_popup_hint: 'Detalles de llanta NUEVA se ingresan en ventana', add_another_new: 'Toca aquí para agregar otra llanta nueva',
+                add_services: 'Agregar Servicios', repairs: 'Reparaciones', alignment: 'Alineación', suspension: 'Trabajo de Suspensión', brakes: 'Frenos',
+                other_service: 'Otro Servicio', service_name: 'Nombre del servicio', add_other: 'Agregar Otro Servicio',
+                current_sale: 'Venta Actual', no_items: 'No se han agregado artículos',
+                subtotal: 'SUBTOTAL:', tax_note: 'Impuesto (8.6%) se aplica a pagos con tarjeta', complete_sale: 'Completar Venta →',
+                remaining: 'Saldo restante', collected: 'Cobrado:', select_method: 'Selecciona el método de pago:',
+                cash: 'Efectivo', p2p: 'P2P', p2p_sub: 'Zelle / Venmo / CashApp', card: 'Tarjeta',
+                cancel: 'Cancelar', back: '← Regresar', amount_due: 'Monto a pagar (sin impuesto):', change_due: 'Cambio:',
+                complete_sale_check: 'Completar Venta ✓', add_to_payment: 'Agregar al Pago →',
+                card_terminal: 'Terminal de Tarjeta', remaining_balance: 'Saldo restante:', plus_tax: '+ impuesto (8.6%) =',
+                terminal_ref: '# Confirmación del Terminal', enter_ref: 'Ingresa el código de confirmación', complete: 'Completar Venta',
+                review_sign: 'Por favor revise su compra y firme abajo',
+                all_final: '*** TODAS LAS VENTAS SON FINALES ***', customer_sig: 'Firma del Cliente:', sig_clear: 'Limpiar',
+                sig_back: 'Regresar', accept_complete: 'Aceptar y Completar Venta',
+                new_tire_source: 'Llanta NUEVA — Origen', source_hint: '¿De dónde viene esta llanta?',
+                from_stock: 'De Nuestro Inventario', from_warehouse: 'Del Almacén', brand: 'Marca',
+                sale_complete: '¡VENTA COMPLETADA!', reprint: 'Reimprimir Recibo', close: 'Cerrar',
+                employees_label: 'Empleados:', lang_toggle: 'EN', add: 'Agregar',
+                training_toggle: 'Modo Entrenamiento', training_banner: '⚠️ MODO ENTRENAMIENTO — Ingresa el # de factura del papel',
+                invoice_prompt: 'Ingresa el # de factura del papel', invoice_placeholder: 'ej. 1-032525-001',
+                invoice_confirm: 'Continuar →', invoice_cancel: 'Cancelar',
+            }
+        };
+
+        function EmployeeSelect({ storeNumber, onSelect, lang, onToggleLang }) {
+            const T = (k) => STRINGS[lang][k];
+            return (
+                <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
+                    <div className="absolute top-4 right-4">
+                        <button onClick={onToggleLang}
+                            className="bg-blue-600 text-white font-bold px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                            {T('lang_toggle')}
+                        </button>
+                    </div>
+                    <div className="w-full max-w-md">
+                        <div className="text-center mb-8">
+                            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <span className="text-white font-bold text-lg tracking-tight">JTS</span>
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Jay's Tire Shop</h1>
+                            <p className="text-sm text-gray-400 mt-1">Store #{storeNumber}</p>
+                            <p className="text-gray-700 font-semibold mt-5 text-base">{T('employees_label')}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {EMPLOYEES.map(name => (
+                                <button key={name} onClick={() => onSelect(name)}
+                                    className="group border-2 border-blue-200 hover:border-blue-500 hover:shadow-md bg-white text-gray-900 font-bold text-lg py-6 rounded-2xl transition-all active:scale-95">
+                                    {name}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="mt-6 border-t border-gray-100 pt-5 space-y-3">
+                            <a href={`inventory.html?store=${storeNumber}#employee`}
+                                className="flex items-center justify-center gap-2 w-full bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white font-semibold text-base py-4 rounded-2xl border border-blue-200 hover:border-blue-600 transition-all active:scale-95">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                </svg>
+                                Ver Inventario
+                            </a>
+                            <a href="index.html"
+                                className="block w-full text-gray-400 hover:text-gray-600 font-medium text-sm py-3 rounded-2xl text-center transition-colors">
+                                {T('back_dashboard')}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function POS() {
+            const [lang, setLang] = useState('es');
+            const T = (k) => STRINGS[lang][k];
+            const toggleLang = () => setLang(l => l === 'es' ? 'en' : 'es');
+            const [storeNumber, setStoreNumber] = useState(initialStore);
+            const [employeeId, setEmployeeId] = useState('');
+            const [transactionCounter, setTransactionCounter] = useState(1);
+            const [currentReceiptNumber, setCurrentReceiptNumber] = useState('');
+            const [trainingMode, setTrainingMode] = useState(false);
+            const [showInvoiceInput, setShowInvoiceInput] = useState(false);
+            const [trainingInvoiceNumber, setTrainingInvoiceNumber] = useState('');
+
+            const [vehicleMake, setVehicleMake] = useState('');
+            const [vehicleMakeSearch, setVehicleMakeSearch] = useState('');
+            const [vehicleModel, setVehicleModel] = useState('');
+            const [vehicleYear, setVehicleYear] = useState('');
+            const [vehicleYearSearch, setVehicleYearSearch] = useState('');
+            const [licensePlate, setLicensePlate] = useState('');
+            const [customerPhone, setCustomerPhone] = useState('');
+            const [internalNotes, setInternalNotes] = useState('');
+            const [tirePositions, setTirePositions] = useState([]);
+            
+            const [tireCondition, setTireCondition] = useState('');
+            const [tireSize, setTireSize] = useState('');
+            const [tireBrand, setTireBrand] = useState('');
+            const [tireBrandSearch, setTireBrandSearch] = useState('');
+            const [tireSource, setTireSource] = useState('');
+            const [tirePrice, setTirePrice] = useState('');
+            const [tireQuantity, setTireQuantity] = useState('1');
+            const [tireSizeSearch, setTireSizeSearch] = useState('');
+            
+            const [showServicePopup, setShowServicePopup] = useState(false);
+            const [currentServiceName, setCurrentServiceName] = useState('');
+            const [servicePrice, setServicePrice] = useState('');
+            
+            const [terminalCode, setTerminalCode] = useState('');
+            const [showPaymentScreen, setShowPaymentScreen] = useState(false);
+            const [activePaymentMethod, setActivePaymentMethod] = useState(null); // 'cash'|'p2p'|'card'
+            const [amountInput, setAmountInput] = useState('');
+
+            const [otherServiceName, setOtherServiceName] = useState('');
+            const [cartItems, setCartItems] = useState([]);
+            const [paymentMethod, setPaymentMethod] = useState('');
+            const [showSaleComplete, setShowSaleComplete] = useState(false);
+            const [showSignaturePopup, setShowSignaturePopup] = useState(false);
+            const [pendingReceiptNumber, setPendingReceiptNumber] = useState('');
+            const [capturedSignature, setCapturedSignature] = useState(null);
+            const [cashPaidAmount, setCashPaidAmount] = useState(0);
+            const [p2pPaidAmount, setP2pPaidAmount] = useState(0);
+            const [showSourcePopup, setShowSourcePopup] = useState(false);
+            const [showNewTireDetailsPopup, setShowNewTireDetailsPopup] = useState(false);
+            const signatureCanvasRef = useRef(null);
+            const isDrawingRef = useRef(false);
+
+            const filteredTireSizes = useMemo(() => !tireSizeSearch ? TIRE_SIZES : TIRE_SIZES.filter(s => s.includes(tireSizeSearch)), [tireSizeSearch]);
+            const filteredBrands = useMemo(() => !tireBrandSearch ? TIRE_BRANDS : TIRE_BRANDS.filter(b => b.toLowerCase().includes(tireBrandSearch.toLowerCase())), [tireBrandSearch]);
+            const filteredMakes = useMemo(() => !vehicleMakeSearch ? VEHICLE_MAKES : VEHICLE_MAKES.filter(m => m.toLowerCase().includes(vehicleMakeSearch.toLowerCase())), [vehicleMakeSearch]);
+            const filteredYears = useMemo(() => !vehicleYearSearch ? VEHICLE_YEARS : VEHICLE_YEARS.filter(y => y.includes(vehicleYearSearch)), [vehicleYearSearch]);
+
+            useEffect(() => {
+                if (!showSignaturePopup) return;
+                const canvas = signatureCanvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                const getPos = (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleX = canvas.width / rect.width;
+                    const scaleY = canvas.height / rect.height;
+                    const source = e.touches ? e.touches[0] : e;
+                    return { x: (source.clientX - rect.left) * scaleX, y: (source.clientY - rect.top) * scaleY };
+                };
+                const startDraw = (e) => { e.preventDefault(); isDrawingRef.current = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+                const draw = (e) => { e.preventDefault(); if (!isDrawingRef.current) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); };
+                const endDraw = (e) => { e.preventDefault(); isDrawingRef.current = false; };
+
+                canvas.addEventListener('mousedown', startDraw);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('mouseup', endDraw);
+                canvas.addEventListener('mouseleave', endDraw);
+                canvas.addEventListener('touchstart', startDraw, { passive: false });
+                canvas.addEventListener('touchmove', draw, { passive: false });
+                canvas.addEventListener('touchend', endDraw);
+                return () => {
+                    canvas.removeEventListener('mousedown', startDraw);
+                    canvas.removeEventListener('mousemove', draw);
+                    canvas.removeEventListener('mouseup', endDraw);
+                    canvas.removeEventListener('mouseleave', endDraw);
+                    canvas.removeEventListener('touchstart', startDraw);
+                    canvas.removeEventListener('touchmove', draw);
+                    canvas.removeEventListener('touchend', endDraw);
+                };
+            }, [showSignaturePopup]);
+
+            const openSignaturePopup = () => {
+                if (cartItems.length === 0) { alert('Please add items to the sale'); return; }
+                if (trainingMode) {
+                    setTrainingInvoiceNumber('');
+                    setShowInvoiceInput(true);
+                    return;
+                }
+                const receiptNum = generateReceiptNumber();
+                setPendingReceiptNumber(receiptNum);
+                setShowSignaturePopup(true);
+            };
+
+            const confirmTrainingInvoice = () => {
+                const num = trainingInvoiceNumber.trim();
+                if (!num) { alert(lang === 'es' ? 'Por favor ingresa el número de factura del papel.' : 'Please enter the invoice number from the paper invoice.'); return; }
+                setPendingReceiptNumber(num);
+                setShowInvoiceInput(false);
+                setShowSignaturePopup(true);
+            };
+
+            const clearSignature = () => {
+                const canvas = signatureCanvasRef.current;
+                if (canvas) { const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); }
+            };
+
+            const acceptSignature = () => {
+                const canvas = signatureCanvasRef.current;
+                const dataUrl = canvas ? canvas.toDataURL('image/png') : null;
+                setCapturedSignature(dataUrl);
+                setShowSignaturePopup(false);
+                setCashPaidAmount(0); setP2pPaidAmount(0);
+                setActivePaymentMethod(null); setAmountInput(''); setTerminalCode('');
+                setShowPaymentScreen(true);
+            };
+
+            const toggleTirePosition = (pos) => {
+                setTirePositions(tirePositions.includes(pos) ? tirePositions.filter(p => p !== pos) : [...tirePositions, pos]);
+            };
+            
+            const addTire = (addToInventory = false) => {
+                if (!tireCondition) { alert('⚠️ PLEASE SELECT TIRE CONDITION ⚠️\n\nYou must click either "USED" or "NEW" before adding a tire.'); return; }
+                if (tireCondition === 'new' && !tireBrand) { alert('Please enter the tire brand for new tires.'); return; }
+                if (tireCondition === 'new' && !tireSource) { alert('Please select where this tire is coming from:\nFROM OUR STOCK or SPECIAL ORDER'); return; }
+                if (!tireSize || !tirePrice || !tireQuantity) { alert('Please fill in tire size, price, and quantity'); return; }
+                const price = parseFloat(tirePrice); const qty = parseInt(tireQuantity);
+                if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) { alert('Please enter valid price and quantity'); return; }
+                const brandLabel = tireCondition === 'new' && tireBrand ? ` ${tireBrand}` : '';
+                const description = `${tireCondition.toUpperCase()} Tire${brandLabel} ${tireSize}`;
+                const fromInventory = tireCondition === 'new' ? (tireSource === 'stock' ? 1 : 0) : 0;
+                setCartItems([...cartItems, { id: Date.now(), type: 'tire', condition: tireCondition, brand: tireBrand || null, fromInventory, description, size: tireSize, price, quantity: qty, total: price * qty, addToInventory }]);
+                setTireCondition(''); setTireSize(''); setTireBrand(''); setTireBrandSearch(''); setTireSource(''); setTirePrice(''); setTireQuantity('1'); setTireSizeSearch('');
+                setShowNewTireDetailsPopup(false); setShowSourcePopup(false);
+            };
+            
+            const openServicePopup = (name) => { setCurrentServiceName(name); setServicePrice(''); setShowServicePopup(true); };
+            const addService = () => {
+                const price = parseFloat(servicePrice);
+                if (isNaN(price) || price <= 0) { alert('Please enter a valid price'); return; }
+                setCartItems([...cartItems, { id: Date.now(), type: 'service', description: currentServiceName, price, quantity: 1, total: price }]);
+                setServicePrice(''); setShowServicePopup(false);
+            };
+            
+            // Build human-readable payment label from amounts collected
+            const buildPaymentLabel = (cashAmt, p2pAmt, cardAmt) => {
+                const parts = [];
+                if (cashAmt > 0) parts.push(`Cash $${cashAmt.toFixed(2)}`);
+                if (p2pAmt > 0) parts.push(`P2P $${p2pAmt.toFixed(2)}`);
+                if (cardAmt > 0) parts.push(`Card $${cardAmt.toFixed(2)}`);
+                return parts.join(' + ') || 'Cash';
+            };
+
+            // Confirm cash or P2P entry — adds to collected, returns to selection if not fully paid
+            const confirmCashOrP2P = () => {
+                const entered = parseFloat(amountInput) || 0;
+                if (entered <= 0) { alert('Please enter an amount'); return; }
+                const newCash = activePaymentMethod === 'cash' ? cashPaidAmount + entered : cashPaidAmount;
+                const newP2P  = activePaymentMethod === 'p2p'  ? p2pPaidAmount  + entered : p2pPaidAmount;
+                const newRemaining = Math.max(0, subtotal - newCash - newP2P);
+                setCashPaidAmount(newCash);
+                setP2pPaidAmount(newP2P);
+                setActivePaymentMethod(null);
+                setAmountInput('');
+                if (newRemaining <= 0.005) {
+                    const pm = (newCash > 0 || newP2P > 0) ? 'cash' : 'cash';
+                    setPaymentMethod(pm);
+                    setShowPaymentScreen(false);
+                    completeSale(capturedSignature, { cashAmt: newCash, p2pAmt: newP2P, pm });
+                }
+                // else: back to button selection with updated remaining
+            };
+
+            // Confirm card payment — always charges the full remaining + tax
+            const confirmCardPayment = () => {
+                if (!terminalCode.trim()) { alert('Please enter a terminal confirmation code'); return; }
+                const hasNoTax = cashPaidAmount > 0 || p2pPaidAmount > 0;
+                const pm = hasNoTax ? 'cash+card' : 'card';
+                setPaymentMethod(pm);
+                setShowPaymentScreen(false);
+                completeSale(capturedSignature, { cashAmt: cashPaidAmount, p2pAmt: p2pPaidAmount, pm });
+            };
+            
+            const removeItem = (id) => { setCartItems(cartItems.filter(item => item.id !== id)); };
+            
+            const subtotal = cartItems.reduce((sum, item) => sum + item.total, 0);
+            // Live remaining balance during payment collection
+            const noTaxRemaining = Math.max(0, subtotal - cashPaidAmount - p2pPaidAmount);
+            const cardCharge = noTaxRemaining * 1.086;
+            // Final tax/total — only meaningful after payment committed (for receipt)
+            const cardPortion = paymentMethod ? Math.max(0, subtotal - cashPaidAmount - p2pPaidAmount) : 0;
+            const tax = (paymentMethod === 'card' || paymentMethod === 'cash+card') ? cardPortion * 0.086 : 0;
+            const total = subtotal + tax;
+            
+            const generateReceiptNumber = () => {
+                const now = new Date();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const year = String(now.getFullYear()).slice(-2);
+                const counter = String(transactionCounter).padStart(3, '0');
+                return `#${storeNumber}-${month}${day}${year}-${counter}`;
+            };
+            
+            const completeSale = async (signatureDataUrl = null, ov = {}) => {
+                // ov (overrides) avoids async state lag when called right after setState
+                const fCash = ov.cashAmt ?? cashPaidAmount;
+                const fP2P  = ov.p2pAmt  ?? p2pPaidAmount;
+                const fPM   = ov.pm      ?? paymentMethod;
+                const fCardPre = Math.max(0, subtotal - fCash - fP2P);
+                const fTax   = (fPM === 'card' || fPM === 'cash+card') ? fCardPre * 0.086 : 0;
+                const fTotal = subtotal + fTax;
+                const fCardCharge = fCardPre * 1.086;
+
+                const receiptNum = pendingReceiptNumber || generateReceiptNumber();
+                setCurrentReceiptNumber(receiptNum);
+
+                // Save to database
+                const paymentLabel = fPM === 'card' ? 'Card' : buildPaymentLabel(fCash, fP2P, fPM === 'cash+card' ? fCardCharge : 0);
+                const transactionData = {
+                    receipt_number: receiptNum.replace('#', ''),
+                    store_number: parseInt(storeNumber),
+                    transaction_date: new Date().toISOString().split('T')[0],
+                    payment_method: paymentLabel,
+                    subtotal: subtotal,
+                    tax: fTax,
+                    total: fTotal,
+                    vehicle_make: vehicleMake || null,
+                    vehicle_model: vehicleModel || null,
+                    vehicle_year: vehicleYear ? parseInt(vehicleYear) : null,
+                    license_plate: licensePlate || null,
+                    customer_phone: customerPhone || null,
+                    signature: signatureDataUrl || null,
+                    employee_id: employeeId,
+                    internal_notes: internalNotes || null,
+                    terminal_code: terminalCode || null,
+                    items: cartItems.map(item => ({
+                        item_type: item.type === 'tire' ? (item.condition === 'used' ? 'used_tire' : 'new_tire') :
+                                   item.description.toLowerCase().includes('labor') ? 'labor' :
+                                   item.description.toLowerCase().includes('alignment') ? 'alignment' : 'other',
+                        description: item.description,
+                        tire_size: item.size || null,
+                        tire_positions: tirePositions.length > 0 ? tirePositions.join(',') : null,
+                        quantity: item.quantity,
+                        unit_price: item.price,
+                        total_price: item.total,
+                        brand: item.brand || null,
+                        from_inventory: item.fromInventory || 0
+                    }))
+                };
+
+                try {
+                    const response = await fetch(`${API_URL}/transactions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(transactionData)
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.error('Failed to save transaction:', result.error);
+                        // Still complete the sale even if database save fails
+                    }
+                } catch (error) {
+                    console.error('Error saving to database:', error);
+                    // Still complete the sale even if database save fails
+                }
+
+                printReceipt(receiptNum, signatureDataUrl, { cash: fCash, p2p: fP2P, pm: fPM, tax: fTax, total: fTotal, cardCharge: fCardCharge });
+                setTransactionCounter(transactionCounter + 1);
+                setShowSaleComplete(true);
+            };
+            
+            const clearSaleAfterComplete = () => {
+                setShowSaleComplete(false); setVehicleMake(''); setVehicleMakeSearch(''); setVehicleModel(''); setVehicleYear(''); setVehicleYearSearch(''); setLicensePlate(''); setCustomerPhone(''); setInternalNotes(''); setTirePositions([]); setCartItems([]); setPaymentMethod(''); setTerminalCode(''); setShowPaymentScreen(false); setActivePaymentMethod(null); setAmountInput(''); setCapturedSignature(null); setCashPaidAmount(0); setP2pPaidAmount(0); setPendingReceiptNumber(''); setShowSourcePopup(false); setShowNewTireDetailsPopup(false); setShowInvoiceInput(false); setTrainingInvoiceNumber('');
+            };
+            
+            const reprintLastReceipt = () => { if (currentReceiptNumber) { printReceipt(currentReceiptNumber); } setShowSaleComplete(false); clearSaleAfterComplete(); };
+            
+            const printReceipt = (receiptNumber, signatureDataUrl = null, ov = {}) => {
+                const receiptWindow = window.open('', '_blank', 'width=400,height=600');
+                if (!receiptWindow) { alert('Popup blocked! Please allow popups for this site to print receipts.'); return; }
+                const date = new Date().toLocaleString('en-US');
+                const storeAddresses = {'1': '2932 N 16th St, Phoenix, AZ 85016', '2': '2347 E Osborn Rd, Phoenix, AZ 85016', '3': '430 N 16th St, Phoenix, AZ 85006'};
+                const storeAddress = storeAddresses[storeNumber];
+                const positionsText = tirePositions.length > 0 ? tirePositions.join(', ') : 'None';
+                let itemsText = '';
+                cartItems.forEach(item => {
+                    const desc = item.type === 'tire' ? `${item.condition.toUpperCase()} Tire ${item.size}` : item.description;
+                    itemsText += desc + '\n  $' + item.price.toFixed(2) + ' x ' + item.quantity + '               $' + item.total.toFixed(2) + '\n\n';
+                });
+                const rPM = ov.pm ?? paymentMethod;
+                const rTax = ov.tax ?? tax;
+                const rTotal = ov.total ?? total;
+                const rCash = ov.cash ?? cashPaidAmount;
+                const rP2P = ov.p2p ?? p2pPaidAmount;
+                const rCardCharge = ov.cardCharge ?? 0;
+                const receiptPaymentLabel = rPM === 'card' ? 'Card' : buildPaymentLabel(rCash, rP2P, rPM === 'cash+card' ? rCardCharge : 0);
+                const receiptShowTax = rPM === 'card' || rPM === 'cash+card';
+                const sigSection = signatureDataUrl
+                    ? '<div>Customer Signature:</div><div style="margin-top:6px;"><img src="' + signatureDataUrl + '" style="display:block;max-width:240px;border-top:1px solid #000;padding-top:4px;" /></div>'
+                    : '<div>Customer Signature:</div><div class="signature-line"></div>';
+                receiptWindow.document.write(`<html><head><title>Receipt ${receiptNumber}</title><style>@page{size:80mm auto;margin:0}body{font-family:'Courier New',monospace;font-size:11px;padding:10px;width:80mm;margin:0 auto}.center{text-align:center}.bold{font-weight:bold}.line{border-top:1px dashed black;margin:5px 0}.double-line{border-top:2px solid black;margin:5px 0}.spacer{margin:10px 0}pre{margin:0;font-family:'Courier New',monospace;font-size:11px}.signature-line{border-top:1px solid black;width:200px;margin:20px auto 5px auto}.print-button{position:fixed;top:10px;right:10px;background:#4CAF50;color:white;border:none;padding:10px 20px;cursor:pointer;font-size:14px;border-radius:5px;z-index:1000}.print-button:hover{background:#45a049}@media print{.print-button{display:none}}</style></head><body><button class="print-button" onclick="window.print()">🖨️ Print Receipt</button><div class="center bold" style="font-size:14px;">JAY'S TIRE SHOP #${storeNumber}</div><div class="center" style="font-size:10px;">${storeAddress}</div><div class="double-line"></div><div class="center" style="font-size:10px;">New & Used Tires • Rim Repair<br>Flat Repair • Tire Balancing • Brakes</div><div class="double-line"></div><div class="spacer"></div><div class="center bold">Receipt ${receiptNumber}</div><div class="center">${date}</div><div class="spacer"></div><div><div class="bold">Vehicle Information:</div><div>Make: ${vehicleMake || 'N/A'}</div><div>Model: ${vehicleModel || 'N/A'}</div><div>Year: ${vehicleYear || 'N/A'}</div><div>Plate: ${licensePlate || 'N/A'}</div></div><div class="spacer"></div><div class="bold">Tires Serviced: ${positionsText}</div><div class="line"></div><pre>${itemsText}</pre><div class="line"></div><pre>Subtotal:                    $${subtotal.toFixed(2)}\n${receiptShowTax ? 'Tax (8.6%):                   $' + rTax.toFixed(2) : ''}</pre><div class="double-line"></div><pre class="bold" style="font-size:13px;">TOTAL:                       $${rTotal.toFixed(2)}</pre><div class="double-line"></div><div class="spacer"></div><div class="bold">Payment Method: ${receiptPaymentLabel}</div><div class="spacer"></div><div class="double-line"></div><div class="center bold">*** ALL SALES ARE FINAL ***</div><div class="double-line"></div><div style="font-size:9px;text-align:justify;">Used tires do NOT have warranty, they are sold as is. All new tires have a 1 (one) year manufacturer warranty unless otherwise specified. Original receipt is required for all new tire warranties.<br><br>We are not responsible for any items left behind including but not limited to caps, wheel lugs, locks or keys.<br><br>Items left for repair must be paid in full and picked up within 45 days from the date of this receipt. An express mechanic's lien is hereby acknowledged on above vehicle to secure the amount of repairs thereto.<br><br>By signing you agree to these terms.</div><div class="spacer"></div><div class="spacer"></div>${sigSection}<div class="spacer"></div><div class="spacer"></div><div class="center">Thank you for your business!</div><div class="double-line"></div></body></html>`);
+                receiptWindow.document.close();
+            };
+            
+            if (!employeeId) {
+                return <EmployeeSelect storeNumber={storeNumber} onSelect={(name) => setEmployeeId(name)} lang={lang} onToggleLang={toggleLang} />;
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-4">
+                    <div className="bg-white border-b-4 border-black p-4 mb-4">
+                        <div className="flex justify-between items-center">
+                            <a href="index.html" className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded">
+                                {T('back_dashboard')}
+                            </a>
+                            <div className="flex items-center">
+                                <div className="w-20 h-20 bg-black rounded-full flex items-center justify-center mr-4">
+                                    <span className="text-white font-bold text-2xl">JTS</span>
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-bold">JAY'S TIRE SHOP #{storeNumber}</h1>
+                                    <p className="text-gray-600">{T('pos_subtitle')}</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <button onClick={toggleLang}
+                                    className="px-3 py-1 bg-black text-white font-bold rounded text-sm hover:bg-gray-700">
+                                    {T('lang_toggle')}
+                                </button>
+                                <button onClick={() => setEmployeeId('')} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded text-sm">
+                                    {T('switch_employee')}
+                                </button>
+                                <button onClick={() => setTrainingMode(m => !m)}
+                                    className={`px-3 py-1 font-bold rounded text-sm border-2 ${trainingMode ? 'bg-orange-500 border-orange-600 text-white hover:bg-orange-600' : 'bg-white border-orange-400 text-orange-600 hover:bg-orange-50'}`}>
+                                    {T('training_toggle')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {trainingMode && (
+                        <div className="bg-orange-500 text-white text-center font-bold py-2 px-4 mb-4 rounded shadow text-sm tracking-wide">
+                            {T('training_banner')}
+                        </div>
+                    )}
+
+                    <div className="bg-white p-4 mb-4 rounded shadow">
+                        <h2 className="text-lg font-bold mb-3">{T('vehicle_info')}</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">{T('make')}</label>
+                                <input type="text" list="vehicle-makes" placeholder="Type to search..." value={vehicleMakeSearch}
+                                    onChange={(e) => { setVehicleMakeSearch(e.target.value); setVehicleMake(e.target.value); }}
+                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                                <datalist id="vehicle-makes">{filteredMakes.map(m => <option key={m} value={m} />)}</datalist>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">{T('model')}</label>
+                                <input type="text" placeholder={T('model')} value={vehicleModel} onChange={(e) => setVehicleModel(e.target.value)}
+                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">{T('year')}</label>
+                                <input type="text" list="vehicle-years" placeholder="..." value={vehicleYearSearch}
+                                    onChange={(e) => { setVehicleYearSearch(e.target.value); setVehicleYear(e.target.value); }}
+                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                                <datalist id="vehicle-years">{filteredYears.map(y => <option key={y} value={y} />)}</datalist>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">{T('license_plate')}</label>
+                                <input type="text" placeholder={T('license_plate')} value={licensePlate} onChange={(e) => setLicensePlate(e.target.value)}
+                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">{lang === 'es' ? 'Teléfono' : 'Phone #'} <span className="text-gray-400 font-normal text-xs">({lang === 'es' ? 'opcional' : 'optional'})</span></label>
+                                <input type="tel" placeholder="(000) 000-0000" value={customerPhone}
+                                    onChange={(e) => {
+                                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                        let formatted = digits;
+                                        if (digits.length >= 7) formatted = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+                                        else if (digits.length >= 4) formatted = `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+                                        else if (digits.length > 0) formatted = `(${digits}`;
+                                        setCustomerPhone(formatted);
+                                    }}
+                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">{T('internal_notes')}</label>
+                            <textarea placeholder="Internal Notes" value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)}
+                                className="border-2 border-gray-300 rounded p-2 w-full" rows="2" />
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 mb-4 rounded shadow">
+                        <h2 className="text-lg font-bold mb-2">{T('tire_positions')}</h2>
+                        <p className="text-sm text-gray-600 mb-3">{T('tire_positions_hint')}</p>
+                        <div className="flex justify-center items-center gap-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                {['LF', 'RF', 'LR', 'RR'].map(pos => (
+                                    <button key={pos} onClick={() => toggleTirePosition(pos)}
+                                        className={`w-24 h-20 rounded-lg font-bold text-xl border-2 ${tirePositions.includes(pos) ? 'bg-black text-white border-black' : 'bg-white border-gray-400 hover:border-gray-600'}`}>
+                                        {pos}
+                                    </button>
+                                ))}
+                            </div>
+                            <button onClick={() => toggleTirePosition('S')}
+                                className={`w-24 h-20 rounded-lg font-bold text-xl border-2 ${tirePositions.includes('S') ? 'bg-black text-white border-black' : 'bg-white border-gray-400 hover:border-gray-600'}`}>
+                                S
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="space-y-4">
+                            <div className="bg-white p-4 rounded shadow">
+                                <h2 className="text-lg font-bold mb-3">{T('add_tires')}</h2>
+                                <div className="space-y-3">
+                                    <div className="bg-yellow-50 border-2 border-yellow-400 rounded p-3">
+                                        <p className="font-bold text-center mb-2 text-yellow-800">{T('select_condition')}</p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => { setTireCondition('used'); setTireSource(''); }} className={`py-4 rounded-lg font-bold text-lg border-2 ${tireCondition === 'used' ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-400'}`}>{T('used')}</button>
+                                            <button onClick={() => { setTireCondition('new'); setTireSource(''); setTireBrand(''); setTireBrandSearch(''); setTireSize(''); setTireSizeSearch(''); setTirePrice(''); setTireQuantity('1'); setShowSourcePopup(true); }} className={`py-4 rounded-lg font-bold text-lg border-2 ${tireCondition === 'new' ? 'bg-black text-white border-black' : 'bg-white text-gray-700 border-gray-400'}`}>{T('new_tire')}</button>
+                                        </div>
+                                    </div>
+                                    {tireCondition === 'used' && (<>
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">{T('tire_size')}</label>
+                                            <input type="text" list="tire-sizes" placeholder="..." value={tireSizeSearch}
+                                                onChange={(e) => { setTireSizeSearch(e.target.value); setTireSize(e.target.value); }}
+                                                className="border-2 border-gray-300 rounded p-2 w-full" />
+                                            <datalist id="tire-sizes">{filteredTireSizes.map(s => <option key={s} value={s} />)}</datalist>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">{T('price')}</label>
+                                                <input type="number" step="0.01" placeholder="0.00" value={tirePrice} onChange={(e) => setTirePrice(e.target.value)}
+                                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">{T('quantity')}</label>
+                                                <input type="number" min="1" value={tireQuantity} onChange={(e) => setTireQuantity(e.target.value)}
+                                                    className="border-2 border-gray-300 rounded p-2 w-full" />
+                                            </div>
+                                        </div>
+                                        <button onClick={() => addTire(false)} className="w-full bg-black text-white font-bold py-3 rounded hover:bg-gray-800">{T('add_tire')}</button>
+                                    </>)}
+                                    {tireCondition === 'new' && (
+                                        <div className="text-center py-3 text-sm text-gray-500 border-2 border-dashed border-gray-300 rounded">
+                                            <p className="font-medium">{T('new_tire_popup_hint')}</p>
+                                            <button onClick={() => setShowSourcePopup(true)} className="mt-2 text-blue-600 underline text-sm">{T('add_another_new')}</button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-4 rounded shadow">
+                                <h2 className="text-lg font-bold mb-3">{T('add_services')}</h2>
+                                <div className="space-y-2">
+                                    <button onClick={() => openServicePopup('Repairs')} className="w-full bg-gray-200 hover:bg-gray-300 font-medium py-3 rounded border-2 border-gray-400">{T('repairs')}</button>
+                                    <button onClick={() => openServicePopup('Alignment')} className="w-full bg-gray-200 hover:bg-gray-300 font-medium py-3 rounded border-2 border-gray-400">{T('alignment')}</button>
+                                    <button onClick={() => openServicePopup('Suspension Work')} className="w-full bg-gray-200 hover:bg-gray-300 font-medium py-3 rounded border-2 border-gray-400">{T('suspension')}</button>
+                                    <button onClick={() => openServicePopup('Brakes')} className="w-full bg-gray-200 hover:bg-gray-300 font-medium py-3 rounded border-2 border-gray-400">{T('brakes')}</button>
+                                    <div className="pt-2 border-t-2 border-gray-300 mt-3">
+                                        <p className="text-sm font-medium mb-2">{T('other_service')}</p>
+                                        <input type="text" placeholder={T('service_name')} value={otherServiceName} onChange={(e) => setOtherServiceName(e.target.value)}
+                                            className="border-2 border-gray-300 rounded p-2 w-full mb-2" />
+                                        <button onClick={() => { if (!otherServiceName) { alert('Please enter a service name'); return; } openServicePopup(otherServiceName); setOtherServiceName(''); }}
+                                            className="w-full bg-gray-200 hover:bg-gray-300 font-medium py-2 rounded border-2 border-gray-400">{T('add_other')}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="bg-white p-4 rounded shadow">
+                                <h2 className="text-lg font-bold mb-3">{T('current_sale')}</h2>
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {cartItems.length === 0 ? <p className="text-gray-500 text-center py-8">{T('no_items')}</p> : cartItems.map(item => (
+                                        <div key={item.id} className="flex justify-between items-center border-b pb-2">
+                                            <div className="flex-1">
+                                                <p className="font-medium">
+                                                    {item.type === 'tire' && <span className={`px-2 py-1 rounded text-xs font-bold mr-2 ${item.condition === 'used' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{item.condition.toUpperCase()}</span>}
+                                                    {item.description}
+                                                </p>
+                                                <p className="text-sm text-gray-600">${item.price.toFixed(2)} x {item.quantity}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <p className="font-bold">${item.total.toFixed(2)}</p>
+                                                <button onClick={() => removeItem(item.id)} className="text-red-600 hover:text-red-800"><XIcon /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-4 rounded shadow">
+                                <div className="flex justify-between text-3xl font-bold border-b-2 border-black pb-3 mb-4">
+                                    <span>{T('subtotal')}</span><span>${subtotal.toFixed(2)}</span>
+                                </div>
+                                <p className="text-sm text-gray-500 mb-4 text-center">{T('tax_note')}</p>
+                                <button onClick={openSignaturePopup} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-5 rounded text-2xl">
+                                    {T('complete_sale')}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {showSaleComplete && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-8 rounded shadow-lg text-center">
+                                <h2 className="text-4xl font-bold text-green-600 mb-4">{T('sale_complete')}</h2>
+                                <p className="text-xl font-bold mb-2">Receipt {currentReceiptNumber}</p>
+                                <p className="text-3xl font-bold mb-2">${total.toFixed(2)}</p>
+                                <p className="text-gray-600 mb-6">Payment: {paymentMethod === 'card' ? 'Card' : paymentMethod === 'cash+card' ? buildPaymentLabel(cashPaidAmount, p2pPaidAmount, cardPortion * 1.086) : buildPaymentLabel(cashPaidAmount, p2pPaidAmount, 0)}</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={reprintLastReceipt} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded text-lg">{T('reprint')}</button>
+                                    <button onClick={clearSaleAfterComplete} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded text-lg">{T('close')}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showSourcePopup && (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded-lg shadow-xl w-80">
+                                <h3 className="text-xl font-bold mb-1 text-center">{T('new_tire_source')}</h3>
+                                <p className="text-sm text-gray-500 text-center mb-4">{T('source_hint')}</p>
+                                <div className="space-y-3">
+                                    <button onClick={() => { setTireSource('stock'); setShowSourcePopup(false); setShowNewTireDetailsPopup(true); }}
+                                        className="w-full bg-white border-2 border-gray-400 hover:border-black hover:bg-gray-50 font-bold py-4 rounded-lg text-lg">
+                                        {T('from_stock')}
+                                    </button>
+                                    <button onClick={() => { setTireSource('warehouse'); setShowSourcePopup(false); setShowNewTireDetailsPopup(true); }}
+                                        className="w-full bg-white border-2 border-gray-400 hover:border-black hover:bg-gray-50 font-bold py-4 rounded-lg text-lg">
+                                        {T('from_warehouse')}
+                                    </button>
+                                    {['1','2','3'].filter(s => s !== storeNumber).map(s => (
+                                        <button key={s} onClick={() => { setTireSource(`store_${s}`); setShowSourcePopup(false); setShowNewTireDetailsPopup(true); }}
+                                            className="w-full bg-white border-2 border-gray-400 hover:border-black hover:bg-gray-50 font-bold py-4 rounded-lg text-lg">
+                                            Tire Shop #{s}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => { setShowSourcePopup(false); setTireCondition(''); }}
+                                        className="w-full bg-gray-200 hover:bg-gray-300 font-medium py-3 rounded-lg text-gray-700">
+                                        {T('cancel')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showNewTireDetailsPopup && (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+                                <h3 className="text-xl font-bold mb-1">NEW Tire Details</h3>
+                                <p className="text-sm font-medium text-blue-700 mb-4">
+                                    Source: {tireSource === 'stock' ? 'From Stock' : tireSource === 'warehouse' ? 'From Warehouse' : `Tire Shop #${tireSource.replace('store_','')}`}
+                                </p>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">{T('brand')} <span className="text-red-600">*</span></label>
+                                        <input type="text" list="tire-brands-popup" placeholder="..." value={tireBrandSearch}
+                                            onChange={(e) => { setTireBrandSearch(e.target.value); setTireBrand(e.target.value); }}
+                                            className="border-2 border-green-400 rounded p-2 w-full" autoFocus />
+                                        <datalist id="tire-brands-popup">{filteredBrands.map(b => <option key={b} value={b} />)}</datalist>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">{T('tire_size')} <span className="text-red-600">*</span></label>
+                                        <input type="text" list="tire-sizes-popup" placeholder="..." value={tireSizeSearch}
+                                            onChange={(e) => { setTireSizeSearch(e.target.value); setTireSize(e.target.value); }}
+                                            className="border-2 border-gray-300 rounded p-2 w-full" />
+                                        <datalist id="tire-sizes-popup">{filteredTireSizes.map(s => <option key={s} value={s} />)}</datalist>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">{T('price')} <span className="text-red-600">*</span></label>
+                                            <input type="number" step="0.01" placeholder="0.00" value={tirePrice} onChange={(e) => setTirePrice(e.target.value)}
+                                                className="border-2 border-gray-300 rounded p-2 w-full" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">{T('quantity')} <span className="text-red-600">*</span></label>
+                                            <input type="number" min="1" value={tireQuantity} onChange={(e) => setTireQuantity(e.target.value)}
+                                                className="border-2 border-gray-300 rounded p-2 w-full" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 pt-1">
+                                        <button onClick={() => { setShowNewTireDetailsPopup(false); setShowSourcePopup(true); setTireBrand(''); setTireBrandSearch(''); setTireSize(''); setTireSizeSearch(''); setTirePrice(''); setTireQuantity('1'); }}
+                                            className="bg-gray-200 hover:bg-gray-300 font-medium py-3 rounded-lg">{T('cancel')}</button>
+                                        <button onClick={() => addTire(false)} className="bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800">{T('add_tire')}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showServicePopup && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded shadow-lg w-80">
+                                <h3 className="text-xl font-bold mb-4">{currentServiceName} — {T('price')}</h3>
+                                <input type="number" step="0.01" placeholder="0.00" value={servicePrice} onChange={(e) => setServicePrice(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') addService(); }} className="border-2 border-gray-300 rounded p-3 w-full mb-4 text-lg" autoFocus />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => { setShowServicePopup(false); setServicePrice(''); }} className="bg-gray-300 hover:bg-gray-400 font-medium py-2 rounded">{T('cancel')}</button>
+                                    <button onClick={addService} className="bg-black text-white font-bold py-2 rounded hover:bg-gray-800">{T('add')}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showPaymentScreen && (() => {
+                        const entered = parseFloat(amountInput) || 0;
+                        const isCard = activePaymentMethod === 'card';
+                        const isCashOrP2P = activePaymentMethod === 'cash' || activePaymentMethod === 'p2p';
+                        const change = isCashOrP2P && entered > noTaxRemaining ? entered - noTaxRemaining : 0;
+                        const covers = isCashOrP2P && entered >= noTaxRemaining - 0.005;
+                        return (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+
+                                {/* ── Method selection ── */}
+                                {!activePaymentMethod && (
+                                    <>
+                                        <div className="text-center mb-5">
+                                            <p className="text-sm text-gray-500 mb-1">{T('remaining')}</p>
+                                            <p className="text-4xl font-bold">${noTaxRemaining.toFixed(2)}</p>
+                                            {(cashPaidAmount > 0 || p2pPaidAmount > 0) && (
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    {T('collected')} {buildPaymentLabel(cashPaidAmount, p2pPaidAmount, 0)}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <p className="text-sm font-medium text-center mb-3">{T('select_method')}</p>
+                                        <div className="space-y-3">
+                                            <button onClick={() => setActivePaymentMethod('cash')}
+                                                className="w-full py-5 text-xl font-bold border-2 border-gray-300 rounded-xl hover:border-black hover:bg-gray-50 active:bg-gray-100">
+                                                {T('cash')}
+                                            </button>
+                                            <button onClick={() => setActivePaymentMethod('p2p')}
+                                                className="w-full py-5 text-xl font-bold border-2 border-gray-300 rounded-xl hover:border-black hover:bg-gray-50 active:bg-gray-100">
+                                                {T('p2p')}
+                                                <div className="text-sm font-normal text-gray-500">{T('p2p_sub')}</div>
+                                            </button>
+                                            <button onClick={() => { setActivePaymentMethod('card'); setTerminalCode(''); }}
+                                                className="w-full py-5 text-xl font-bold border-2 border-blue-400 rounded-xl hover:border-blue-600 hover:bg-blue-50 text-blue-700 active:bg-blue-100">
+                                                {T('card')}
+                                                <div className="text-sm font-normal text-blue-500">${cardCharge.toFixed(2)} (incl. 8.6% tax)</div>
+                                            </button>
+                                        </div>
+                                        <button onClick={() => { setShowPaymentScreen(false); setCashPaidAmount(0); setP2pPaidAmount(0); }}
+                                            className="w-full mt-4 py-2 text-sm text-gray-500 hover:text-gray-700">{T('cancel')}</button>
+                                    </>
+                                )}
+
+                                {/* ── Cash or P2P amount entry ── */}
+                                {isCashOrP2P && (
+                                    <>
+                                        <h3 className="text-xl font-bold mb-1">
+                                            {activePaymentMethod === 'p2p' ? `${T('p2p')} — ${T('p2p_sub')}` : T('cash')}
+                                        </h3>
+                                        <div className="mb-4 p-3 bg-green-50 border-2 border-green-300 rounded text-center">
+                                            <p className="text-sm text-gray-600">{T('amount_due')}</p>
+                                            <p className="text-3xl font-bold text-green-700">${noTaxRemaining.toFixed(2)}</p>
+                                        </div>
+                                        <input type="number" step="0.01" min="0" placeholder="0.00" value={amountInput}
+                                            onChange={(e) => setAmountInput(e.target.value)}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') confirmCashOrP2P(); }}
+                                            className="border-2 border-gray-300 rounded p-3 w-full text-3xl font-bold text-center mb-3" autoFocus />
+                                        {change > 0.005 && (
+                                            <div className="mb-3 p-2 bg-blue-50 border border-blue-300 rounded text-center text-sm">
+                                                {T('change_due')} <strong>${change.toFixed(2)}</strong>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => { setActivePaymentMethod(null); setAmountInput(''); }}
+                                                className="bg-gray-300 hover:bg-gray-400 font-medium py-3 rounded">{T('back')}</button>
+                                            <button onClick={confirmCashOrP2P}
+                                                className={`text-white font-bold py-3 rounded ${covers ? 'bg-green-600 hover:bg-green-700' : 'bg-yellow-500 hover:bg-yellow-600'}`}>
+                                                {covers ? T('complete_sale_check') : T('add_to_payment')}
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* ── Card terminal ── */}
+                                {isCard && (
+                                    <>
+                                        <h3 className="text-xl font-bold mb-3">{T('card_terminal')}</h3>
+                                        {(cashPaidAmount > 0 || p2pPaidAmount > 0) && (
+                                            <p className="text-sm text-gray-500 mb-3">
+                                                {T('collected')} ${(cashPaidAmount + p2pPaidAmount).toFixed(2)}
+                                            </p>
+                                        )}
+                                        <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded text-center">
+                                            <p className="text-sm text-gray-600">{T('remaining_balance')}</p>
+                                            <p className="text-lg text-gray-600">${noTaxRemaining.toFixed(2)} {T('plus_tax')}</p>
+                                            <p className="text-4xl font-bold text-blue-700">${cardCharge.toFixed(2)}</p>
+                                        </div>
+                                        <label className="block text-sm font-bold mb-1">{T('terminal_ref')}</label>
+                                        <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder={T('enter_ref')}
+                                            value={terminalCode} onChange={(e) => setTerminalCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') confirmCardPayment(); }}
+                                            className="border-2 border-gray-300 rounded p-3 w-full text-lg mb-4" autoFocus />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => { setActivePaymentMethod(null); setTerminalCode(''); }}
+                                                className="bg-gray-300 hover:bg-gray-400 font-medium py-3 rounded">{T('back')}</button>
+                                            <button onClick={confirmCardPayment}
+                                                className="bg-black text-white font-bold py-3 rounded hover:bg-gray-800">{T('complete')}</button>
+                                        </div>
+                                    </>
+                                )}
+
+                            </div>
+                        </div>
+                        );
+                    })()}
+
+                    {showInvoiceInput && (
+                        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                                <div className="bg-orange-500 text-white text-center font-bold py-2 px-4 rounded mb-4 text-sm">
+                                    ⚠️ {T('training_toggle').toUpperCase()}
+                                </div>
+                                <h3 className="text-xl font-bold mb-2 text-center">{T('invoice_prompt')}</h3>
+                                <p className="text-sm text-gray-500 text-center mb-4">{lang === 'es' ? 'Copia el número exactamente como aparece en el papel' : 'Copy the number exactly as it appears on the paper invoice'}</p>
+                                <input
+                                    type="text"
+                                    placeholder={T('invoice_placeholder')}
+                                    value={trainingInvoiceNumber}
+                                    onChange={(e) => setTrainingInvoiceNumber(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') confirmTrainingInvoice(); }}
+                                    className="border-2 border-orange-400 rounded p-3 w-full text-lg text-center font-bold mb-4 focus:outline-none focus:border-orange-600"
+                                    autoFocus
+                                />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => setShowInvoiceInput(false)}
+                                        className="bg-gray-300 hover:bg-gray-400 font-medium py-3 rounded">
+                                        {T('invoice_cancel')}
+                                    </button>
+                                    <button onClick={confirmTrainingInvoice}
+                                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded">
+                                        {T('invoice_confirm')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showSignaturePopup && (
+                        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-3">
+                            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '97vh' }}>
+                                {/* Header */}
+                                <div className="p-4 border-b-4 border-black text-center bg-black text-white rounded-t-lg">
+                                    <div className="text-2xl font-bold">JAY'S TIRE SHOP #{storeNumber}</div>
+                                    <div className="text-sm">{{ '1': '2932 N 16th St, Phoenix, AZ 85016', '2': '2347 E Osborn Rd, Phoenix, AZ 85016', '3': '430 N 16th St, Phoenix, AZ 85006' }[storeNumber]}</div>
+                                    <div className="text-lg font-bold mt-1">{T('review_sign')}</div>
+                                </div>
+
+                                {/* Scrollable info */}
+                                <div className="overflow-y-auto flex-1 p-4 text-sm">
+                                    <div className="flex justify-between mb-3 text-gray-600">
+                                        <span>Receipt: <strong>{pendingReceiptNumber}</strong></span>
+                                        <span>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                                    </div>
+
+                                    {(vehicleMake || vehicleModel || vehicleYear || licensePlate) && (
+                                        <div className="mb-3 p-3 bg-gray-50 rounded border">
+                                            <div className="font-bold mb-1">Vehicle:</div>
+                                            <div>{[vehicleYear, vehicleMake, vehicleModel].filter(Boolean).join(' ') || 'N/A'}{licensePlate ? ` — Plate: ${licensePlate}` : ''}</div>
+                                        </div>
+                                    )}
+
+                                    <table className="w-full mb-3 border-collapse">
+                                        <thead><tr className="border-b-2 border-black"><th className="text-left py-1">Item</th><th className="text-right py-1">Qty</th><th className="text-right py-1">Price</th><th className="text-right py-1">Total</th></tr></thead>
+                                        <tbody>
+                                            {cartItems.map(item => (
+                                                <tr key={item.id} className="border-b border-gray-200">
+                                                    <td className="py-1">{item.description}</td>
+                                                    <td className="text-right py-1">{item.quantity}</td>
+                                                    <td className="text-right py-1">${item.price.toFixed(2)}</td>
+                                                    <td className="text-right py-1 font-medium">${item.total.toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+
+                                    <div className="flex justify-between mb-1"><span>Subtotal:</span><span>${subtotal.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-xl font-bold border-t-2 border-black pt-2 mb-1"><span>SUBTOTAL:</span><span>${subtotal.toFixed(2)}</span></div>
+                                    <p className="text-xs text-gray-500 mb-3 text-right">+8.6% tax applies to card payments</p>
+
+                                    <div className="border-t-2 border-black pt-3 mb-1">
+                                        <div className="text-center font-bold text-sm mb-2">{T('all_final')}</div>
+                                        <div className="text-xs text-gray-700 leading-relaxed p-2 bg-gray-50 rounded border">
+                                            Used tires do NOT have warranty, they are sold as is. All new tires have a 1 (one) year manufacturer warranty unless otherwise specified. Original receipt is required for all new tire warranties.<br /><br />
+                                            We are not responsible for any items left behind including but not limited to caps, wheel lugs, locks or keys.<br /><br />
+                                            Items left for repair must be paid in full and picked up within 45 days from the date of this receipt. An express mechanic's lien is hereby acknowledged on above vehicle to secure the amount of repairs thereto.<br /><br />
+                                            <strong>By signing below you agree to these terms.</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Signature area */}
+                                <div className="p-4 border-t-2 border-black bg-gray-50 rounded-b-lg">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="font-bold">{T('customer_sig')}</span>
+                                        <button onClick={clearSignature} className="text-sm bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded font-medium">{T('sig_clear')}</button>
+                                    </div>
+                                    <canvas ref={signatureCanvasRef} width={700} height={160}
+                                        className="border-2 border-gray-400 rounded bg-white w-full"
+                                        style={{ touchAction: 'none', cursor: 'crosshair' }} />
+                                    <div className="grid grid-cols-2 gap-3 mt-3">
+                                        <button onClick={() => setShowSignaturePopup(false)} className="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 rounded text-lg">{T('sig_back')}</button>
+                                        <button onClick={acceptSignature} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded text-lg">{T('accept_complete')}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            );
+        }
+        
+        ReactDOM.render(<POS />, document.getElementById('root'));
+    </script>
+</body>
+</html>

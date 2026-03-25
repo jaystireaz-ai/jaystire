@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jay's Tire Shop - Transactions</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="admin.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const API_URL = window.JTS_API_URL;
+
+        const TIRE_SIZES = ["155/60/17","205/40/17","205/40/18","215/40/17","215/40/18","215/45/17","215/45/18","215/50/17","215/50/18","215/55/17","215/55/18","215/60/17","215/65/17","225/45/17","225/45/18","225/50/17","225/50/18","225/55/17","225/55/18","225/60/17","225/60/18","225/65/17","235/40/18","235/45/18","235/50/17","235/50/18","235/55/17","235/55/18","235/60/17","235/60/18","235/65/17","235/65/18","235/85/17","245/40/17","245/40/18","245/45/18","245/55/18","245/60/18","245/65/17","245/70/17","245/75/17","245/80/17","255/55/18","255/65/17","255/65/18","255/70/17","265/40/18","265/60/17","265/60/18","265/65/17","265/65/18","265/70/17","265/70/18","275/65/18","275/70/18","285/65/17","285/70/17","285/75/18"].sort();
+
+        const EMPLOYEES = ['Jay', 'Noe', 'Felipe', 'Chuy', 'Pedro'];
+        const STORE_ADDRESSES = {
+            1: '2932 N 16th St, Phoenix, AZ 85016',
+            2: '2347 E Osborn Rd, Phoenix, AZ 85016',
+            3: '430 N 16th St, Phoenix, AZ 85006'
+        };
+
+        // Determine initial tab from URL hash
+        const initialTab = () => {
+            const h = window.location.hash.replace('#', '');
+            return ['search', 'reprint', 'void'].includes(h) ? h : 'search';
+        };
+
+        // ── Standalone receipt printer (no live POS state needed) ──────────────
+        function doPrintReceipt(t) {
+            const win = window.open('', '_blank', 'width=400,height=600');
+            if (!win) { alert('Popup blocked! Please allow popups.'); return; }
+            const date = new Date(t.transaction_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            const addr = STORE_ADDRESSES[t.store_number] || '';
+            const showTax = t.payment_method && (t.payment_method.toLowerCase().includes('card'));
+            let itemsText = '';
+            (t.items || []).forEach(item => {
+                const desc = item.description || item.item_type;
+                itemsText += `${desc}\n  $${Number(item.unit_price).toFixed(2)} x ${item.quantity}               $${Number(item.total_price).toFixed(2)}\n\n`;
+            });
+            const positions = (t.items || []).map(i => i.tire_positions).filter(Boolean)[0] || '';
+            win.document.write(`<html><head><title>Receipt ${t.receipt_number}</title><style>@page{size:80mm auto;margin:0}body{font-family:'Courier New',monospace;font-size:11px;padding:10px;width:80mm;margin:0 auto}.center{text-align:center}.bold{font-weight:bold}.line{border-top:1px dashed black;margin:5px 0}.double-line{border-top:2px solid black;margin:5px 0}.spacer{margin:10px 0}pre{margin:0;font-family:'Courier New',monospace;font-size:11px}.signature-line{border-top:1px solid black;width:200px;margin:20px auto 5px auto}.print-button{position:fixed;top:10px;right:10px;background:#4CAF50;color:white;border:none;padding:10px 20px;cursor:pointer;font-size:14px;border-radius:5px;z-index:1000}.print-button:hover{background:#45a049}@media print{.print-button{display:none}}</style></head><body>
+<button class="print-button" onclick="window.print()">🖨️ Print Receipt</button>
+<div class="center bold" style="font-size:14px;">JAY'S TIRE SHOP #${t.store_number}</div>
+<div class="center" style="font-size:10px;">${addr}</div>
+<div class="double-line"></div>
+<div class="center" style="font-size:10px;">New &amp; Used Tires • Rim Repair<br>Flat Repair • Tire Balancing • Brakes</div>
+<div class="double-line"></div>
+<div class="spacer"></div>
+<div class="center bold">*** REPRINT *** Receipt ${t.receipt_number}</div>
+<div class="center">${date}</div>
+<div class="spacer"></div>
+<div><div class="bold">Vehicle Information:</div>
+<div>Make: ${t.vehicle_make || 'N/A'}</div>
+<div>Model: ${t.vehicle_model || 'N/A'}</div>
+<div>Year: ${t.vehicle_year || 'N/A'}</div>
+<div>Plate: ${t.license_plate || 'N/A'}</div></div>
+<div class="spacer"></div>
+<div class="bold">Tires Serviced: ${positions || 'N/A'}</div>
+<div class="line"></div>
+<pre>${itemsText}</pre>
+<div class="line"></div>
+<pre>Subtotal:                    $${Number(t.subtotal).toFixed(2)}\n${showTax ? 'Tax (8.6%):                   $' + Number(t.tax).toFixed(2) + '\n' : ''}</pre>
+<div class="double-line"></div>
+<pre class="bold" style="font-size:13px;">TOTAL:                       $${Number(t.total).toFixed(2)}</pre>
+<div class="double-line"></div>
+<div class="spacer"></div>
+<div class="bold">Payment Method: ${t.payment_method || 'N/A'}</div>
+<div class="spacer"></div>
+<div class="double-line"></div>
+<div class="center bold">*** ALL SALES ARE FINAL ***</div>
+<div class="double-line"></div>
+<div style="font-size:9px;text-align:justify;">Used tires do NOT have warranty, they are sold as is. All new tires have a 1 (one) year manufacturer warranty unless otherwise specified. Original receipt is required for all new tire warranties.<br><br>We are not responsible for any items left behind including but not limited to caps, wheel lugs, locks or keys.</div>
+<div class="spacer"></div>
+<div class="spacer"></div>
+${t.signature
+    ? '<div>Customer Signature:</div><div style="margin-top:6px;"><img src="' + t.signature + '" style="display:block;max-width:240px;border-top:1px solid #000;padding-top:4px;" /></div>'
+    : '<div>Customer Signature:</div><div class="signature-line"></div>'}
+<div class="spacer"></div>
+<div class="spacer"></div>
+<div class="center">Thank you for your business!</div>
+<div class="double-line"></div>
+</body></html>`);
+            win.document.close();
+        }
+
+        // ── Search form component ──────────────────────────────────────────────
+        function SearchForm({ onResults }) {
+            const [receipt, setReceipt] = useState('');
+            const [plate, setPlate] = useState('');
+            const [phone, setPhone] = useState('');
+            const [make, setMake] = useState('');
+            const [model, setModel] = useState('');
+            const [tireSize, setTireSize] = useState('');
+            const [store, setStore] = useState('');
+            const [employee, setEmployee] = useState('');
+            const [dateFrom, setDateFrom] = useState('');
+            const [dateTo, setDateTo] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const handleSearch = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError(null);
+                const params = new URLSearchParams();
+                if (receipt) params.append('receipt', receipt);
+                if (plate) params.append('license_plate', plate);
+                if (phone) params.append('phone', phone.replace(/\D/g, ''));
+                if (make) params.append('make', make);
+                if (model) params.append('model', model);
+                if (tireSize) params.append('tire_size', tireSize);
+                if (store) params.append('store', store);
+                if (employee) params.append('employee', employee);
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+                params.append('limit', '50');
+                try {
+                    const res = await fetch(`${API_URL}/transactions?${params}`);
+                    const data = await res.json();
+                    if (data.success) onResults(data.transactions);
+                    else setError(data.error);
+                } catch {
+                    setError('Could not connect to server.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <form onSubmit={handleSearch} className="bg-white border border-gray-200 rounded-2xl p-5 mb-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Receipt #</label>
+                            <input value={receipt} onChange={e => setReceipt(e.target.value)} placeholder="e.g. 1-032326-001"
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">License Plate</label>
+                            <input value={plate} onChange={e => setPlate(e.target.value)} placeholder="ABC1234"
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Phone</label>
+                            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="602..."
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Store</label>
+                            <select value={store} onChange={e => setStore(e.target.value)} className="border border-gray-300 rounded-lg p-2 w-full text-sm">
+                                <option value="">All Stores</option>
+                                <option value="1">Store #1</option>
+                                <option value="2">Store #2</option>
+                                <option value="3">Store #3</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Make</label>
+                            <input value={make} onChange={e => setMake(e.target.value)} placeholder="Toyota"
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Model</label>
+                            <input value={model} onChange={e => setModel(e.target.value)} placeholder="Camry"
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Tire Size</label>
+                            <select value={tireSize} onChange={e => setTireSize(e.target.value)}
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm">
+                                <option value="">All Sizes</option>
+                                {TIRE_SIZES.map(s => (
+                                    <option key={s} value={s}>{s.replace(/\//g, '')}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Date From</label>
+                            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Date To</label>
+                            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                                className="border border-gray-300 rounded-lg p-2 w-full text-sm" />
+                        </div>
+                    </div>
+                    {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+                    <button type="submit" disabled={loading}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg text-sm disabled:opacity-50">
+                        {loading ? 'Searching...' : 'Search'}
+                    </button>
+                </form>
+            );
+        }
+
+        // ── Results table ─────────────────────────────────────────────────────
+        function ResultsTable({ results, onReprint, onVoid, isAdmin }) {
+            const [expanded, setExpanded] = useState(null);
+            const [details, setDetails] = useState({});
+
+            const loadDetails = async (id) => {
+                if (details[id]) { setExpanded(expanded === id ? null : id); return; }
+                try {
+                    const res = await fetch(`${API_URL}/transactions/${id}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        setDetails(d => ({ ...d, [id]: data.transaction }));
+                        setExpanded(id);
+                    }
+                } catch {}
+            };
+
+            if (results.length === 0) return (
+                <p className="text-center text-gray-400 py-10 text-sm">No transactions found. Try adjusting your search.</p>
+            );
+
+            return (
+                <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200 text-left">
+                                <th className="p-3 font-semibold text-gray-600">Receipt #</th>
+                                <th className="p-3 font-semibold text-gray-600">Date</th>
+                                <th className="p-3 font-semibold text-gray-600">Store</th>
+                                <th className="p-3 font-semibold text-gray-600">Vehicle</th>
+                                <th className="p-3 font-semibold text-gray-600">Employee</th>
+                                <th className="p-3 font-semibold text-gray-600 text-right">Total</th>
+                                <th className="p-3 font-semibold text-gray-600">Payment</th>
+                                <th className="p-3 font-semibold text-gray-600 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {results.map(t => (
+                                <React.Fragment key={t.id}>
+                                    <tr className={`border-b border-gray-100 hover:bg-gray-50 ${t.voided ? 'opacity-50' : ''}`}>
+                                        <td className="p-3 font-mono font-medium text-blue-700">
+                                            {t.voided && <span className="text-xs bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded mr-1">VOID</span>}
+                                            {t.receipt_number}
+                                        </td>
+                                        <td className="p-3 text-gray-600">{t.transaction_date}</td>
+                                        <td className="p-3">#{t.store_number}</td>
+                                        <td className="p-3 text-gray-700">
+                                            {[t.vehicle_year, t.vehicle_make, t.vehicle_model].filter(Boolean).join(' ') || '—'}
+                                            {t.license_plate && <span className="ml-2 text-xs text-gray-400">{t.license_plate}</span>}
+                                        </td>
+                                        <td className="p-3 text-gray-600">{t.employee_id || '—'}</td>
+                                        <td className="p-3 text-right font-semibold">${Number(t.total).toFixed(2)}</td>
+                                        <td className="p-3 text-gray-600 text-sm">{t.payment_method}</td>
+                                        <td className="p-3 text-center">
+                                            <div className="flex items-center justify-center gap-1">
+                                                <button onClick={() => loadDetails(t.id)}
+                                                    className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 font-medium">
+                                                    {expanded === t.id ? 'Hide' : 'View'}
+                                                </button>
+                                                <button onClick={() => onReprint(t)}
+                                                    className="text-xs px-2 py-1 rounded border border-blue-300 text-blue-600 hover:bg-blue-50 font-medium">
+                                                    Reprint
+                                                </button>
+                                                {isAdmin && !t.voided && (
+                                                    <button onClick={() => onVoid(details[t.id] || t)}
+                                                        className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 font-medium">
+                                                        Void
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {expanded === t.id && details[t.id] && (
+                                        <tr className="bg-blue-50 border-b border-blue-100">
+                                            <td colSpan="8" className="px-6 py-3">
+                                                <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Line Items</p>
+                                                <table className="w-full text-xs">
+                                                    <thead>
+                                                        <tr className="text-left text-gray-500 border-b border-blue-200">
+                                                            <th className="pb-1 pr-4">Type</th>
+                                                            <th className="pb-1 pr-4">Description</th>
+                                                            <th className="pb-1 pr-4">Size</th>
+                                                            <th className="pb-1 pr-4 text-center">Qty</th>
+                                                            <th className="pb-1 text-right">Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {details[t.id].items.map(item => (
+                                                            <tr key={item.id} className="border-b border-blue-100">
+                                                                <td className="py-1 pr-4 capitalize">{item.item_type.replace('_', ' ')}</td>
+                                                                <td className="py-1 pr-4">{item.description}{item.brand ? ` — ${item.brand}` : ''}</td>
+                                                                <td className="py-1 pr-4 font-mono">{item.tire_size || '—'}</td>
+                                                                <td className="py-1 pr-4 text-center">{item.quantity}</td>
+                                                                <td className="py-1 text-right font-semibold">${Number(item.total_price).toFixed(2)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                {details[t.id].internal_notes && (
+                                                    <p className="mt-2 text-xs text-gray-500"><span className="font-semibold">Notes:</span> {details[t.id].internal_notes}</p>
+                                                )}
+                                                {details[t.id].customer_phone && (
+                                                    <p className="mt-1 text-xs text-gray-500"><span className="font-semibold">Phone:</span> {details[t.id].customer_phone}</p>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            );
+        }
+
+        // ── Void confirmation card ────────────────────────────────────────────
+        function VoidConfirm({ transaction, onConfirmed, onCancel }) {
+            const [voidedBy, setVoidedBy] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const inventoryItems = (transaction.items || []).filter(i => i.from_inventory && i.item_type === 'new_tire');
+
+            const handleVoid = async () => {
+                if (!voidedBy) { setError('Please select who is voiding this transaction.'); return; }
+                setLoading(true);
+                setError(null);
+                try {
+                    const res = await fetch(`${API_URL}/transactions/${transaction.id}/void`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ voided_by: voidedBy })
+                    });
+                    const data = await res.json();
+                    if (data.success) onConfirmed(data.restored_inventory);
+                    else setError(data.error);
+                } catch {
+                    setError('Could not connect to server.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="bg-white border-2 border-red-200 rounded-2xl p-6 max-w-lg">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-red-500 mb-1">Confirm Void</p>
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Receipt {transaction.receipt_number}</h3>
+                    <div className="bg-gray-50 rounded-xl p-4 mb-4 text-sm space-y-1">
+                        <div className="flex justify-between"><span className="text-gray-500">Date</span><span>{transaction.transaction_date}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Store</span><span>#{transaction.store_number}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-bold">${Number(transaction.total).toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Payment</span><span>{transaction.payment_method}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Employee</span><span>{transaction.employee_id || '—'}</span></div>
+                    </div>
+                    {inventoryItems.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-sm">
+                            <p className="font-semibold text-amber-800 mb-1">⚠ Inventory will be restocked:</p>
+                            {inventoryItems.map(i => (
+                                <p key={i.id} className="text-amber-700">{i.quantity}× {i.brand} {i.tire_size}</p>
+                            ))}
+                        </div>
+                    )}
+                    <div className="mb-4">
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Voided by</label>
+                        <select value={voidedBy} onChange={e => setVoidedBy(e.target.value)}
+                            className="border border-gray-300 rounded-lg p-2 w-full text-sm">
+                            <option value="">Select employee...</option>
+                            {EMPLOYEES.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                    </div>
+                    {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+                    <div className="flex gap-3">
+                        <button onClick={handleVoid} disabled={loading}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-50">
+                            {loading ? 'Voiding...' : 'Confirm Void'}
+                        </button>
+                        <button onClick={onCancel}
+                            className="flex-1 border border-gray-300 hover:bg-gray-50 font-medium py-2.5 rounded-xl text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ── Main App ──────────────────────────────────────────────────────────
+        function TransactionsApp() {
+            const [searchResults, setSearchResults] = useState(null);
+            const [voidTarget, setVoidTarget] = useState(null);
+            const [voidSuccess, setVoidSuccess] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(() => window.JTS_ADMIN?.isAdmin() === true);
+
+            const handleAdminLogin = () => {
+                if (window.JTS_ADMIN) {
+                    window.JTS_ADMIN.showPrompt(() => setIsAdmin(true));
+                }
+            };
+
+            const handleVoidClick = (t) => {
+                if (!t.items) {
+                    fetch(`${API_URL}/transactions/${t.id}`)
+                        .then(r => r.json())
+                        .then(data => { if (data.success) setVoidTarget(data.transaction); });
+                } else {
+                    setVoidTarget(t);
+                }
+            };
+
+            const handleVoidConfirmed = (restored) => {
+                setVoidSuccess({ receipt: voidTarget.receipt_number, restored });
+                setVoidTarget(null);
+                setSearchResults(null);
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <header className="bg-white border-b border-gray-100 px-8 py-5">
+                        <div className="max-w-6xl mx-auto flex items-center gap-4">
+                            <a href="index.html" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">← Dashboard</a>
+                            <div className="w-px h-5 bg-gray-200"></div>
+                            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <span className="text-white font-bold text-xs tracking-tight">JTS</span>
+                            </div>
+                            <div>
+                                <h1 className="text-lg font-bold tracking-tight text-gray-900">Transactions</h1>
+                                <p className="text-xs text-gray-400">Search · Reprint · Void</p>
+                            </div>
+                            <div className="ml-auto">
+                                {isAdmin ? (
+                                    <span className="text-xs bg-green-100 text-green-700 font-semibold px-3 py-1.5 rounded-full">
+                                        ✓ Admin
+                                    </span>
+                                ) : (
+                                    <button onClick={handleAdminLogin}
+                                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold px-3 py-1.5 rounded-full">
+                                        🔒 Admin Login
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto px-8 py-8">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Transaction History</p>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-5">Search Customers</h2>
+
+                        {voidSuccess && (
+                            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 mb-5 flex items-start justify-between">
+                                <div>
+                                    <p className="text-green-700 font-bold">✓ Transaction Voided — Receipt {voidSuccess.receipt}</p>
+                                    {voidSuccess.restored.length > 0 && (
+                                        <p className="text-green-600 text-sm mt-1">Inventory restored: {voidSuccess.restored.join(', ')}</p>
+                                    )}
+                                </div>
+                                <button onClick={() => setVoidSuccess(null)} className="text-green-500 hover:text-green-700 text-lg font-bold ml-4">×</button>
+                            </div>
+                        )}
+
+                        {voidTarget ? (
+                            <VoidConfirm
+                                transaction={voidTarget}
+                                onConfirmed={handleVoidConfirmed}
+                                onCancel={() => setVoidTarget(null)}
+                            />
+                        ) : (
+                            <>
+                                <SearchForm onResults={setSearchResults} />
+                                {searchResults !== null && (
+                                    <ResultsTable
+                                        results={searchResults}
+                                        onReprint={t => doPrintReceipt(t)}
+                                        onVoid={handleVoidClick}
+                                        isAdmin={isAdmin}
+                                    />
+                                )}
+                            </>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<TransactionsApp />);
+    </script>
+</body>
+</html>

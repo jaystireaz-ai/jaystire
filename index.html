@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jay's Tire Shop - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+    <script src="admin.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    </style>
+</head>
+<body data-admin-gate class="bg-white min-h-screen text-gray-900">
+
+    <!-- Header -->
+    <header class="border-b border-gray-100 px-8 py-5">
+        <div class="max-w-5xl mx-auto flex items-center gap-4">
+            <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span class="text-white font-bold text-sm tracking-tight">JTS</span>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-gray-900">Jay's Tire Shop</h1>
+                <p class="text-xs text-gray-400 mt-0.5">Management Dashboard</p>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-8 py-10">
+
+        <!-- POS Section -->
+        <section class="mb-12">
+            <p class="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-1">Point of Sale</p>
+            <h2 class="text-2xl font-bold text-gray-900 mb-1">Select a Store</h2>
+            <p class="text-sm text-gray-400 mb-6">Open the POS system for a location</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <a href="pos.html?store=1" class="group block border-2 border-blue-200 hover:border-blue-500 rounded-2xl p-6 transition-all hover:shadow-md no-underline">
+                    <div class="w-10 h-10 bg-blue-50 group-hover:bg-blue-600 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-600 group-hover:text-white transition-colors">
+                            <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                    </div>
+                    <p class="font-bold text-gray-900 text-lg mb-1">Store #1</p>
+                    <p class="text-sm text-gray-400">2932 N 16th St, Phoenix AZ</p>
+                    <p class="text-sm font-semibold text-blue-600 mt-4">Open POS →</p>
+                </a>
+
+                <a href="pos.html?store=2" class="group block border-2 border-blue-200 hover:border-blue-500 rounded-2xl p-6 transition-all hover:shadow-md no-underline">
+                    <div class="w-10 h-10 bg-blue-50 group-hover:bg-blue-600 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-600 group-hover:text-white transition-colors">
+                            <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                    </div>
+                    <p class="font-bold text-gray-900 text-lg mb-1">Store #2</p>
+                    <p class="text-sm text-gray-400">2347 E Osborn Rd, Phoenix AZ</p>
+                    <p class="text-sm font-semibold text-blue-600 mt-4">Open POS →</p>
+                </a>
+
+                <a href="pos.html?store=3" class="group block border-2 border-blue-200 hover:border-blue-500 rounded-2xl p-6 transition-all hover:shadow-md no-underline">
+                    <div class="w-10 h-10 bg-blue-50 group-hover:bg-blue-600 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-600 group-hover:text-white transition-colors">
+                            <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                    </div>
+                    <p class="font-bold text-gray-900 text-lg mb-1">Store #3</p>
+                    <p class="text-sm text-gray-400">430 N 16th St, Phoenix AZ</p>
+                    <p class="text-sm font-semibold text-blue-600 mt-4">Open POS →</p>
+                </a>
+            </div>
+        </section>
+
+        <!-- Management Tools -->
+        <section>
+            <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Management</p>
+            <h2 class="text-2xl font-bold text-gray-900 mb-1">Tools</h2>
+            <p class="text-sm text-gray-400 mb-6">Administrative functions for managers and owners</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                <!-- Inventory — LIVE -->
+                <a href="inventory.html" class="group block border border-blue-200 bg-blue-50 hover:bg-blue-600 hover:border-blue-600 rounded-2xl p-6 transition-all hover:shadow-md no-underline">
+                    <div class="w-10 h-10 bg-blue-600 group-hover:bg-white rounded-xl flex items-center justify-center mb-4 transition-colors">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white group-hover:text-blue-600 transition-colors">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                    </div>
+                    <p class="font-bold text-blue-900 group-hover:text-white text-base mb-1 transition-colors">New Tire Inventory</p>
+                    <p class="text-sm text-blue-600 group-hover:text-blue-100 transition-colors">Stock, transfers, costs, weekly count</p>
+                    <p class="text-sm font-semibold text-blue-600 group-hover:text-white mt-4 transition-colors">Open →</p>
+                </a>
+
+                <!-- Search Customers — LIVE -->
+                <a href="transactions.html" class="group block border-2 border-blue-200 hover:border-blue-500 rounded-2xl p-6 transition-all hover:shadow-md no-underline">
+                    <div class="w-10 h-10 bg-blue-50 group-hover:bg-blue-600 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-600 group-hover:text-white transition-colors">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </div>
+                    <p class="font-bold text-gray-900 text-base mb-1">Search Customers</p>
+                    <p class="text-sm text-gray-400">Find by plate, receipt, date, make/model</p>
+                    <p class="text-sm font-semibold text-blue-600 mt-4">Open →</p>
+                </a>
+
+                <!-- Reports — LIVE -->
+                <a href="reports.html" class="group block border-2 border-blue-200 hover:border-blue-500 rounded-2xl p-6 transition-all hover:shadow-md no-underline">
+                    <div class="w-10 h-10 bg-blue-50 group-hover:bg-blue-600 rounded-xl flex items-center justify-center mb-4 transition-colors">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-blue-600 group-hover:text-white transition-colors">
+                            <line x1="12" y1="20" x2="12" y2="10"></line>
+                            <line x1="18" y1="20" x2="18" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="16"></line>
+                        </svg>
+                    </div>
+                    <p class="font-bold text-gray-900 text-base mb-1">View Reports</p>
+                    <p class="text-sm text-gray-400">Sales reports and analytics</p>
+                    <p class="text-sm font-semibold text-blue-600 mt-4">Open →</p>
+                </a>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="max-w-5xl mx-auto px-8 py-8 mt-8 border-t border-gray-100">
+        <p class="text-xs text-gray-300 text-center">© 2026 Jay's Tire Shop · 3 Locations · Phoenix, AZ</p>
+    </footer>
+
+</body>
+</html>

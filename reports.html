@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jay's Tire Shop - Reports</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="config.js"></script>
+    <script src="admin.js"></script>
+</head>
+<body data-admin-gate class="bg-gray-50">
+<div id="root"></div>
+<script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+    const API = window.JTS_API_URL;
+
+    // Default date range: last 12 months
+    const today = new Date();
+    const DEFAULT_TO = today.toISOString().split('T')[0];
+    const DEFAULT_FROM = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()).toISOString().split('T')[0];
+
+    const STORE_COLORS = { 1: '#2563eb', 2: '#f97316', 3: '#16a34a' };
+    const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const SERVICE_LABELS = { used_tire: 'Used Tires', new_tire: 'New Tires', labor: 'Labor', alignment: 'Alignment', other: 'Other' };
+    const SERVICE_COLORS = ['#2563eb','#16a34a','#f97316','#8b5cf6','#ec4899'];
+
+    function fmt(n) { return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function fmtK(n) { const v = Number(n || 0); return v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v.toFixed(0)}`; }
+
+    // ── Reusable chart canvas wrapper ─────────────────────────────────────────
+    function ChartBox({ title, subtitle, children, fullWidth }) {
+        return (
+            <div className={`bg-white border border-gray-200 rounded-2xl p-5 ${fullWidth ? 'col-span-2' : ''}`}>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-0.5">{subtitle}</p>
+                <h3 className="text-base font-bold text-gray-900 mb-4">{title}</h3>
+                {children}
+            </div>
+        );
+    }
+
+    // ── KPI card ──────────────────────────────────────────────────────────────
+    function KPI({ label, value, sub, color }) {
+        return (
+            <div className={`bg-white border-2 ${color || 'border-gray-200'} rounded-2xl p-5`}>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">{label}</p>
+                <p className="text-3xl font-bold text-gray-900">{value}</p>
+                {sub && <p className="text-sm text-gray-500 mt-1">{sub}</p>}
+            </div>
+        );
+    }
+
+    // ── Hook: create & destroy a Chart.js instance ────────────────────────────
+    function useChart(ref, config, deps) {
+        const instance = useRef(null);
+        useEffect(() => {
+            if (!ref.current) return;
+            if (instance.current) instance.current.destroy();
+            if (!config) return;
+            instance.current = new Chart(ref.current, config);
+            return () => { if (instance.current) { instance.current.destroy(); instance.current = null; } };
+        }, deps);
+    }
+
+    // ── Individual chart components ───────────────────────────────────────────
+
+    function PaymentMethodChart({ data }) {
+        const ref = useRef(null);
+        useChart(ref, data.length ? {
+            type: 'doughnut',
+            plugins: [ChartDataLabels],
+            data: {
+                labels: data.map(d => d.method),
+                datasets: [{ data: data.map(d => d.revenue), backgroundColor: ['#2563eb','#16a34a','#f97316'], borderWidth: 0 }]
+            },
+            options: {
+                responsive: true, cutout: '60%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { padding: 16 } },
+                    datalabels: {
+                        color: '#fff', font: { weight: 'bold', size: 12 },
+                        formatter: (v, ctx) => {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            return `${(v/total*100).toFixed(1)}%`;
+                        }
+                    }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <div className="flex flex-col items-center"><canvas ref={ref} style={{maxHeight: 260}}></canvas>
+                <div className="mt-3 w-full space-y-1">
+                    {data.map(d => (
+                        <div key={d.method} className="flex justify-between text-sm">
+                            <span className="text-gray-600">{d.method}</span>
+                            <span className="font-semibold">${fmt(d.revenue)} <span className="text-gray-400 font-normal">({d.count} sales)</span></span>
+                        </div>
+                    ))}
+                </div></div>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function ServiceBreakdownChart({ data }) {
+        const ref = useRef(null);
+        useChart(ref, data.length ? {
+            type: 'doughnut',
+            plugins: [ChartDataLabels],
+            data: {
+                labels: data.map(d => SERVICE_LABELS[d.item_type] || d.item_type),
+                datasets: [{ data: data.map(d => d.revenue), backgroundColor: SERVICE_COLORS, borderWidth: 0 }]
+            },
+            options: {
+                responsive: true, cutout: '60%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { padding: 12 } },
+                    datalabels: {
+                        color: '#fff', font: { weight: 'bold', size: 11 },
+                        formatter: (v, ctx) => {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            return v/total > 0.05 ? `${(v/total*100).toFixed(1)}%` : '';
+                        }
+                    }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <div className="flex flex-col items-center"><canvas ref={ref} style={{maxHeight: 260}}></canvas>
+                <div className="mt-3 w-full space-y-1">
+                    {data.map((d, i) => (
+                        <div key={d.item_type} className="flex justify-between text-sm">
+                            <span className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{background: SERVICE_COLORS[i]}}></span>
+                                <span className="text-gray-600">{SERVICE_LABELS[d.item_type] || d.item_type}</span>
+                            </span>
+                            <span className="font-semibold">${fmt(d.revenue)}</span>
+                        </div>
+                    ))}
+                </div></div>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function TireSizesChart({ data }) {
+        const ref = useRef(null);
+        useChart(ref, data.length ? {
+            type: 'bar',
+            plugins: [ChartDataLabels],
+            data: {
+                labels: data.map(d => d.tire_size),
+                datasets: [{ data: data.map(d => d.count), backgroundColor: '#2563eb', borderRadius: 4, barPercentage: 0.6, categoryPercentage: 0.7 }]
+            },
+            options: {
+                indexAxis: 'y', responsive: true,
+                layout: { padding: { right: 36 } },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: { anchor: 'end', align: 'end', color: '#2563eb', font: { weight: 'bold', size: 11 }, formatter: v => v }
+                },
+                scales: {
+                    x: { display: false, grid: { display: false } },
+                    y: { grid: { display: false }, reverse: true }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <canvas ref={ref} style={{height: `${Math.max(180, data.length * 26)}px`}}></canvas>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function DayOfWeekChart({ data }) {
+        const ref = useRef(null);
+        const filled = DOW_LABELS.map((_, i) => {
+            const row = data.find(d => parseInt(d.dow) === i);
+            return row ? Number(row.revenue) : 0;
+        });
+        useChart(ref, data.length ? {
+            type: 'bar',
+            plugins: [ChartDataLabels],
+            data: {
+                labels: DOW_LABELS,
+                datasets: [{ data: filled, backgroundColor: filled.map(v => v === Math.max(...filled) ? '#2563eb' : '#bfdbfe'), borderRadius: 6, barPercentage: 0.6 }]
+            },
+            options: {
+                responsive: true,
+                layout: { padding: { top: 24 } },
+                plugins: {
+                    legend: { display: false },
+                    datalabels: { anchor: 'end', align: 'end', color: '#1e40af', font: { weight: 'bold', size: 10 }, formatter: v => fmtK(v) }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { display: false, grid: { display: false } }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <canvas ref={ref} style={{height: 200}}></canvas>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function DailySalesChart({ data }) {
+        const ref = useRef(null);
+        const dates = [...new Set(data.map(d => d.transaction_date))].sort();
+        const datasets = [1, 2, 3].map(s => ({
+            label: `Store #${s}`,
+            data: dates.map(date => {
+                const row = data.find(d => d.transaction_date === date && d.store_number === s);
+                return row ? Number(row.revenue) : null;
+            }),
+            borderColor: STORE_COLORS[s],
+            backgroundColor: STORE_COLORS[s] + '22',
+            tension: 0.3, pointRadius: 0, borderWidth: 2, fill: false, spanGaps: true
+        }));
+        useChart(ref, data.length ? {
+            type: 'line',
+            data: { labels: dates, datasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' }, datalabels: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 12, maxRotation: 0 } },
+                    y: { grid: { color: '#f3f4f6' }, ticks: { callback: v => fmtK(v) } }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <canvas ref={ref} style={{height: 240}}></canvas>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function MonthlyRevenueChart({ data }) {
+        const ref = useRef(null);
+        const months = [...new Set(data.map(d => d.month))].sort();
+        const datasets = [1, 2, 3].map(s => ({
+            label: `Store #${s}`,
+            data: months.map(m => {
+                const row = data.find(d => d.month === m && d.store_number === s);
+                return row ? Number(row.revenue) : 0;
+            }),
+            backgroundColor: STORE_COLORS[s], borderRadius: 4, barPercentage: 0.7
+        }));
+        useChart(ref, data.length ? {
+            type: 'bar',
+            data: { labels: months, datasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' }, datalabels: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, stacked: false },
+                    y: { grid: { color: '#f3f4f6' }, ticks: { callback: v => fmtK(v) } }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <canvas ref={ref} style={{height: 240}}></canvas>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function MonthlyTireCostChart({ data }) {
+        const ref = useRef(null);
+        useChart(ref, data.length ? {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.month),
+                datasets: [
+                    { label: 'Cost', data: data.map(d => Number(d.total_cost || 0)), backgroundColor: '#f97316', borderRadius: 4, barPercentage: 0.4 },
+                    { label: 'Revenue', data: data.map(d => Number(d.total_revenue || 0)), backgroundColor: '#2563eb', borderRadius: 4, barPercentage: 0.4 }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' }, datalabels: { display: false } },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { grid: { color: '#f3f4f6' }, ticks: { callback: v => fmtK(v) } }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <canvas ref={ref} style={{height: 220}}></canvas>
+            : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
+    }
+
+    function MonthlyBrandsChart({ data }) {
+        const ref = useRef(null);
+        const months = [...new Set(data.map(d => d.month))].sort();
+        const allBrands = [...new Set(data.map(d => d.brand))];
+        // Pick top 6 brands by total count
+        const brandTotals = allBrands.map(b => ({ b, total: data.filter(d => d.brand === b).reduce((s, d) => s + d.count, 0) }));
+        brandTotals.sort((a, b) => b.total - a.total);
+        const topBrands = brandTotals.slice(0, 6).map(x => x.b);
+        const palette = ['#2563eb','#f97316','#16a34a','#8b5cf6','#ec4899','#eab308'];
+        const datasets = topBrands.map((brand, i) => ({
+            label: brand,
+            data: months.map(m => {
+                const row = data.find(d => d.month === m && d.brand === brand);
+                return row ? row.count : 0;
+            }),
+            backgroundColor: palette[i], borderRadius: 3, barPercentage: 0.7
+        }));
+        useChart(ref, data.length ? {
+            type: 'bar',
+            data: { labels: months, datasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'top' }, datalabels: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, stacked: true },
+                    y: { grid: { color: '#f3f4f6' }, stacked: true, ticks: { stepSize: 1 } }
+                }
+            }
+        } : null, [data]);
+        return data.length
+            ? <canvas ref={ref} style={{height: 220}}></canvas>
+            : <p className="text-gray-400 text-sm text-center py-8">No brand data yet. Brands are captured from new tire sales in the POS.</p>;
+    }
+
+    // ── Main App ──────────────────────────────────────────────────────────────
+    function ReportsApp() {
+        const [dateFrom, setDateFrom] = useState(DEFAULT_FROM);
+        const [dateTo, setDateTo] = useState(DEFAULT_TO);
+        const [store, setStore] = useState('');
+        const [loading, setLoading] = useState(false);
+        const [error, setError] = useState(null);
+
+        const [summary, setSummary] = useState(null);
+        const [paymentData, setPaymentData] = useState([]);
+        const [dailyData, setDailyData] = useState([]);
+        const [serviceData, setServiceData] = useState([]);
+        const [tireSizeData, setTireSizeData] = useState([]);
+        const [dowData, setDowData] = useState([]);
+        const [monthlyRevData, setMonthlyRevData] = useState([]);
+        const [monthlyTireData, setMonthlyTireData] = useState([]);
+        const [monthlyBrandData, setMonthlyBrandData] = useState([]);
+
+        const buildParams = () => {
+            const p = new URLSearchParams();
+            if (dateFrom) p.append('date_from', dateFrom);
+            if (dateTo) p.append('date_to', dateTo);
+            if (store) p.append('store', store);
+            return p.toString();
+        };
+
+        const loadAll = useCallback(async () => {
+            setLoading(true);
+            setError(null);
+            const q = buildParams();
+            try {
+                const [s, pm, daily, svc, sizes, dow, monthly, tireCost, brands] = await Promise.all([
+                    fetch(`${API}/reports/summary?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/payment-methods?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/daily-sales?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/service-breakdown?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/tire-sizes?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/day-of-week?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/monthly-revenue?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/monthly-tire-cost?${q}`).then(r => r.json()),
+                    fetch(`${API}/reports/monthly-brands?${q}`).then(r => r.json()),
+                ]);
+                if (s.success) setSummary(s.data);
+                if (pm.success) setPaymentData(pm.data);
+                if (daily.success) setDailyData(daily.data);
+                if (svc.success) setServiceData(svc.data);
+                if (sizes.success) setTireSizeData(sizes.data);
+                if (dow.success) setDowData(dow.data);
+                if (monthly.success) setMonthlyRevData(monthly.data);
+                if (tireCost.success) setMonthlyTireData(tireCost.data);
+                if (brands.success) setMonthlyBrandData(brands.data);
+            } catch {
+                setError('Could not connect to server. Make sure the API is running.');
+            } finally {
+                setLoading(false);
+            }
+        }, [dateFrom, dateTo, store]);
+
+        useEffect(() => { loadAll(); }, [loadAll]);
+
+        return (
+            <div className="min-h-screen bg-gray-50">
+                {/* Header */}
+                <header className="bg-white border-b border-gray-100 px-8 py-5">
+                    <div className="max-w-7xl mx-auto flex items-center gap-4">
+                        <a href="index.html" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">← Dashboard</a>
+                        <div className="w-px h-5 bg-gray-200"></div>
+                        <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <span className="text-white font-bold text-xs tracking-tight">JTS</span>
+                        </div>
+                        <div className="flex-1">
+                            <h1 className="text-lg font-bold tracking-tight text-gray-900">Reports</h1>
+                            <p className="text-xs text-gray-400">Sales analytics across all stores</p>
+                        </div>
+                        {/* Filters */}
+                        <div className="flex items-center gap-3">
+                            <select value={store} onChange={e => setStore(e.target.value)}
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700">
+                                <option value="">All Stores</option>
+                                <option value="1">Store #1</option>
+                                <option value="2">Store #2</option>
+                                <option value="3">Store #3</option>
+                            </select>
+                            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700" />
+                            <span className="text-gray-400 text-sm">to</span>
+                            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700" />
+                            <button onClick={loadAll} disabled={loading}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 rounded-lg text-sm disabled:opacity-50">
+                                {loading ? '...' : 'Apply'}
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <main className="max-w-7xl mx-auto px-8 py-8">
+                    {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 text-sm">{error}</div>}
+
+                    {/* KPI Cards */}
+                    {summary && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                            <KPI label="Total Revenue" value={`$${fmt(summary.revenue)}`} color="border-blue-200" />
+                            <KPI label="Transactions" value={Number(summary.txns || 0).toLocaleString()} color="border-gray-200" />
+                            <KPI label="Avg Sale" value={`$${fmt(summary.avg_sale)}`} color="border-gray-200" />
+                            <KPI label="Top Store" value={summary.top_store ? `Store #${summary.top_store.store_number}` : '—'}
+                                sub={summary.top_store ? `$${fmt(summary.top_store.rev)}` : null} color="border-green-200" />
+                        </div>
+                    )}
+
+                    {/* Charts Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                        {/* Daily Sales — full width */}
+                        <div className="md:col-span-2">
+                            <ChartBox title="Daily Sales by Store" subtitle="Revenue" fullWidth>
+                                <DailySalesChart data={dailyData} />
+                            </ChartBox>
+                        </div>
+
+                        {/* Monthly Revenue — full width */}
+                        <div className="md:col-span-2">
+                            <ChartBox title="Monthly Revenue by Store" subtitle="Trend">
+                                <MonthlyRevenueChart data={monthlyRevData} />
+                            </ChartBox>
+                        </div>
+
+                        {/* Payment Methods */}
+                        <ChartBox title="Sales by Payment Method" subtitle="Cash vs Card">
+                            <PaymentMethodChart data={paymentData} />
+                        </ChartBox>
+
+                        {/* Service Breakdown */}
+                        <ChartBox title="Income by Service Type" subtitle="Distribution">
+                            <ServiceBreakdownChart data={serviceData} />
+                        </ChartBox>
+
+                        {/* Day of Week */}
+                        <ChartBox title="Sales by Day of Week" subtitle="Revenue">
+                            <DayOfWeekChart data={dowData} />
+                        </ChartBox>
+
+                        {/* Tire Sizes */}
+                        <ChartBox title="Top Tire Sizes Sold" subtitle="Count">
+                            <TireSizesChart data={tireSizeData} />
+                        </ChartBox>
+
+                        {/* Monthly Tire Cost */}
+                        <ChartBox title="New Tire Cost vs Revenue" subtitle="Monthly">
+                            <MonthlyTireCostChart data={monthlyTireData} />
+                        </ChartBox>
+
+                        {/* Monthly Brands */}
+                        <ChartBox title="New Tire Brands Sold" subtitle="Monthly Count">
+                            <MonthlyBrandsChart data={monthlyBrandData} />
+                        </ChartBox>
+
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<ReportsApp />);
+</script>
+</body>
+</html>
