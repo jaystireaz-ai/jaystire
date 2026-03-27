@@ -19,10 +19,11 @@
             <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                 <span class="text-white font-bold text-sm tracking-tight">JTS</span>
             </div>
-            <div>
+            <div class="flex-1">
                 <h1 class="text-xl font-bold tracking-tight text-gray-900">Jay's Tire Shop</h1>
                 <p class="text-xs text-gray-400 mt-0.5">Management Dashboard</p>
             </div>
+            <div id="jts-user-info" class="flex items-center gap-3 text-sm text-gray-500"></div>
         </div>
     </header>
 
@@ -131,5 +132,17 @@
         <p class="text-xs text-gray-300 text-center">© 2026 Jay's Tire Shop · 3 Locations · Phoenix, AZ</p>
     </footer>
 
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var s = window.JTS_SESSION && window.JTS_SESSION.get();
+        if (!s) return;
+        var el = document.getElementById('jts-user-info');
+        var label = s.role === 'owner' ? 'Owner' : (s.name + ' · Store #' + s.store);
+        el.innerHTML = '<span>' + label + '</span>' +
+            '<button onclick="window.JTS_SESSION.clear()" style="padding:6px 14px;border:1px solid #e5e7eb;' +
+            'border-radius:8px;background:white;cursor:pointer;font-size:13px;color:#374151;">Sign out</button>';
+    });
+</script>
 </body>
 </html>

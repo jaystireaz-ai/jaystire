@@ -25,7 +25,9 @@
         const EMPLOYEES = ['Jay', 'Noe', 'Felipe', 'Chuy', 'Pedro'];
         const STORE_LABELS_ES = { '1': 'Tire Shop #1', '2': 'Tire Shop #2', '3': 'Tire Shop #3' };
 
-        const EMPLOYEE_MODE = window.location.hash === '#employee';
+        const _sess = window.JTS_SESSION ? window.JTS_SESSION.get() : null;
+        const EMPLOYEE_MODE = (window.location.hash === '#employee') || (_sess && _sess.role === 'employee');
+        const EMP_DEFAULT_STORE = _sess && _sess.role === 'employee' ? _sess.store : null;
         const displaySize = s => s ? s.replace(/\//g, ' ') : '';
 
         function InventoryApp() {
@@ -57,7 +59,7 @@
             const [weeklySubmitting, setWeeklySubmitting] = useState(false);
 
             // Employee view
-            const [empStore, setEmpStore] = useState('all');
+            const [empStore, setEmpStore] = useState(EMP_DEFAULT_STORE || 'all');
             const [empSearch, setEmpSearch] = useState('');
 
             const showMsg = (text, ok = true) => { setMessage({ text, ok }); setTimeout(() => setMessage(null), 4000); };
