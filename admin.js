@@ -31,12 +31,10 @@
 
         if (session) {
             if (session.role === 'employee') {
-                if (OWNER_ONLY.indexOf(page) !== -1) { location.href = 'pos.html?store=' + session.store; return; }
-                if (page === 'index.html')           { location.href = 'pos.html?store=' + session.store; return; }
-                if (page === 'pos.html') {
-                    var sp = new URLSearchParams(location.search).get('store');
-                    if (!sp) { location.href = 'pos.html?store=' + session.store; return; }
-                }
+                if (OWNER_ONLY.indexOf(page) !== -1) { location.href = 'index.html'; return; }
+                // Hide management tools on the dashboard
+                var mgmt = document.getElementById('jts-mgmt');
+                if (mgmt) mgmt.style.display = 'none';
             }
             injectSignOut(session);
             return;
@@ -196,7 +194,7 @@
             b.onclick = function () {
                 var sess = { role: 'employee', store: selectedStore, name: this.getAttribute('data-name') };
                 window.JTS_SESSION.set(sess);
-                location.href = 'pos.html?store=' + selectedStore;
+                location.href = 'index.html';
             };
         });
 
