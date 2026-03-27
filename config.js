@@ -7,4 +7,4 @@ window.JTS_API_URL = (
     window.location.hostname === '127.0.0.1'
 )
     ? 'http://localhost:5000/api'
-    : 'https://YOUR-RAILWAY-APP.up.railway.app/api'; // ← Replace after Railway deploy
+    : 'https://jaystire.onrender.com/api';
