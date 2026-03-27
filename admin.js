@@ -32,9 +32,12 @@
         if (session) {
             if (session.role === 'employee') {
                 if (OWNER_ONLY.indexOf(page) !== -1) { location.href = 'index.html'; return; }
-                // Hide management tools on the dashboard
-                var mgmt = document.getElementById('jts-mgmt');
-                if (mgmt) mgmt.style.display = 'none';
+                // Hide owner-only cards on the dashboard (inventory stays visible)
+                var hide = ['jts-link-reports', 'jts-link-transactions'];
+                hide.forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
             }
             injectSignOut(session);
             return;
