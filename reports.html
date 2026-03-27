@@ -378,18 +378,16 @@
         const [monthlyTireData, setMonthlyTireData] = useState([]);
         const [monthlyBrandData, setMonthlyBrandData] = useState([]);
 
-        const buildParams = () => {
+        const loadAll = useCallback(async () => {
+            setLoading(true);
+            setError(null);
+
+            // Build filtered params directly from deps — no external closure
             const p = new URLSearchParams();
             if (dateFrom) p.append('date_from', dateFrom);
             if (dateTo) p.append('date_to', dateTo);
             if (store) p.append('store', store);
-            return p.toString();
-        };
-
-        const loadAll = useCallback(async () => {
-            setLoading(true);
-            setError(null);
-            const q = buildParams();
+            const q = p.toString();
 
             // Trend chart always uses last 12 months — independent of the date filter
             const trendQ = new URLSearchParams();
