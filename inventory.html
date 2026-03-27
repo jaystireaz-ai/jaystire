@@ -26,6 +26,7 @@
         const STORE_LABELS_ES = { '1': 'Tire Shop #1', '2': 'Tire Shop #2', '3': 'Tire Shop #3' };
 
         const EMPLOYEE_MODE = window.location.hash === '#employee';
+        const displaySize = s => s ? s.replace(/\//g, ' ') : '';
 
         function InventoryApp() {
             const [tab, setTab] = useState(EMPLOYEE_MODE ? 'employee' : 'stock');
@@ -40,7 +41,6 @@
             const [recSize, setRecSize] = useState('');
             const [recQty, setRecQty] = useState('');
             const [recCost, setRecCost] = useState('');
-            const [recSalePrice, setRecSalePrice] = useState('');
 
             // Transfer form
             const [trFromStore, setTrFromStore] = useState('1');
@@ -84,15 +84,14 @@
                 if (!recBrand || !recSize || !recQty || !recCost) { showMsg('Please fill in all fields.', false); return; }
                 const qty = parseInt(recQty); const cost = parseFloat(recCost);
                 if (isNaN(qty) || qty <= 0 || isNaN(cost) || cost <= 0) { showMsg('Please enter valid quantity and cost.', false); return; }
-                const salePrice = recSalePrice ? parseFloat(recSalePrice) : null;
-                if (recSalePrice && (isNaN(salePrice) || salePrice <= 0)) { showMsg('Please enter a valid sale price.', false); return; }
+                const salePrice = recCost ? parseFloat(recCost) + 50 : null;
                 try {
                     const res = await fetch(`${API_URL}/inventory/receive`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ store_number: parseInt(recStore), brand: recBrand, size: recSize, quantity: qty, cost_per_tire: cost, sale_price: salePrice })
                     });
                     const data = await res.json();
-                    if (data.success) { showMsg('Stock added successfully!'); setRecBrand(''); setRecSize(''); setRecQty(''); setRecCost(''); setRecSalePrice(''); loadInventory(); }
+                    if (data.success) { showMsg('Stock added successfully!'); setRecBrand(''); setRecSize(''); setRecQty(''); setRecCost(''); loadInventory(); }
                     else showMsg(data.error, false);
                 } catch (e) { showMsg('Error connecting to server.', false); }
             };
@@ -394,7 +393,7 @@
                                             <tr key={item.id} className={`border-b border-gray-200 ${item.quantity === 0 ? 'text-gray-400' : ''}`}>
                                                 <td className="p-2">Store #{item.store_number}</td>
                                                 <td className="p-2 font-medium">{item.brand}</td>
-                                                <td className="p-2">{item.size}</td>
+                                                <td className="p-2">{displaySize(item.size)}</td>
                                                 <td className={`p-2 text-right font-bold ${item.quantity === 0 ? 'text-red-500' : ''}`}>{item.quantity}</td>
                                                 <td className="p-2 text-right">{item.cost_per_tire ? `$${item.cost_per_tire.toFixed(2)}` : '—'}</td>
                                                 <td className="p-2 text-right font-semibold text-green-700">{item.sale_price ? `$${item.sale_price.toFixed(2)}` : '—'}</td>
@@ -437,22 +436,15 @@
                                     <input type="number" min="1" placeholder="0" value={recQty} onChange={e => setRecQty(e.target.value)}
                                         className="border-2 border-gray-300 rounded p-2 w-full" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block font-medium mb-1">Cost Per Tire ($)</label>
-                                        <input type="number" step="0.01" min="0" placeholder="0.00" value={recCost} onChange={e => setRecCost(e.target.value)}
-                                            className="border-2 border-gray-300 rounded p-2 w-full" />
-                                    </div>
-                                    <div>
-                                        <label className="block font-medium mb-1">Sale Price ($)</label>
-                                        <input type="number" step="0.01" min="0" placeholder="0.00" value={recSalePrice} onChange={e => setRecSalePrice(e.target.value)}
-                                            className="border-2 border-green-400 rounded p-2 w-full" />
-                                    </div>
+                                <div>
+                                    <label className="block font-medium mb-1">Cost Per Tire ($)</label>
+                                    <input type="number" step="0.01" min="0" placeholder="0.00" value={recCost} onChange={e => setRecCost(e.target.value)}
+                                        className="border-2 border-gray-300 rounded p-2 w-full" />
+                                    {recCost && <p className="text-xs text-gray-500 mt-1">Sale price will be set to <strong>${(parseFloat(recCost||0)+50).toFixed(2)}</strong> (cost + $50)</p>}
                                 </div>
                                 {recBrand && recSize && recQty && recCost && (
                                     <div className="p-3 bg-gray-50 border rounded text-sm text-gray-700">
-                                        Adding <strong>{recQty} × {recBrand} {recSize}</strong> to Store #{recStore} at <strong>${recCost}/tire</strong>
-                                        {recSalePrice && <> — sell for <strong className="text-green-700">${recSalePrice}</strong></>}
+                                        Adding <strong>{recQty} × {recBrand} {displaySize(recSize)}</strong> to Store #{recStore} at <strong>${recCost}/tire</strong> — sale price <strong className="text-green-700">${(parseFloat(recCost||0)+50).toFixed(2)}</strong>
                                         {' '}(Total cost: <strong>${(parseFloat(recQty||0) * parseFloat(recCost||0)).toFixed(2)}</strong>)
                                     </div>
                                 )}
@@ -500,7 +492,7 @@
                                             <option value="||">— Select tire —</option>
                                             {transferOptions.map(i => (
                                                 <option key={i.id} value={`${i.brand}||${i.size}`}>
-                                                    {i.brand} {i.size} — {i.quantity} available
+                                                    {i.brand} {displaySize(i.size)} — {i.quantity} available
                                                 </option>
                                             ))}
                                         </select>
@@ -556,7 +548,7 @@
                                                 <td className="p-2">{item.transaction_date}</td>
                                                 <td className="p-2 font-mono text-xs">{item.receipt_number}</td>
                                                 <td className="p-2">#{item.store_number}</td>
-                                                <td className="p-2">{item.description || `${item.brand || ''} ${item.tire_size || ''}`}</td>
+                                                <td className="p-2">{item.description ? item.description.replace(/\//g, ' ') : `${item.brand || ''} ${displaySize(item.tire_size)}`}</td>
                                                 <td className="p-2 text-right">{item.quantity}</td>
                                                 <td className="p-2 text-right">${item.unit_price?.toFixed(2)}</td>
                                                 <td className="p-2">
@@ -641,7 +633,7 @@
                                                         return (
                                                             <tr key={row.id} className={`border-b border-gray-200 ${hasDiscrepancy ? 'bg-yellow-50' : ''}`}>
                                                                 <td className="p-2 font-medium">{row.brand}</td>
-                                                                <td className="p-2">{row.size}</td>
+                                                                <td className="p-2">{displaySize(row.size)}</td>
                                                                 <td className="p-2 text-right font-bold">{row.quantity}</td>
                                                                 <td className="p-2 text-right">
                                                                     <input type="number" min="0" placeholder={row.quantity}
@@ -742,7 +734,7 @@
                                                         </span>
                                                     </div>
                                                     <p className="text-xl font-bold text-gray-800 leading-tight">{item.brand}</p>
-                                                    <p className="text-lg text-gray-600 font-mono mb-3">{item.size}</p>
+                                                    <p className="text-lg text-gray-600 font-mono mb-3">{displaySize(item.size)}</p>
                                                     <div className="border-t-2 border-gray-100 pt-3">
                                                         {item.sale_price ? (
                                                             <p className="text-3xl font-black text-green-600">${item.sale_price.toFixed(2)}</p>

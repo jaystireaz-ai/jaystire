@@ -26,6 +26,8 @@
 
         const TIRE_SIZES = ["155/60/17","205/40/17","205/40/18","215/40/17","215/40/18","215/45/17","215/45/18","215/50/17","215/50/18","215/55/17","215/55/18","215/60/17","215/65/17","225/45/17","225/45/18","225/50/17","225/50/18","225/55/17","225/55/18","225/60/17","225/60/18","225/65/17","235/40/18","235/45/18","235/50/17","235/50/18","235/55/17","235/55/18","235/60/17","235/60/18","235/65/17","235/65/18","235/85/17","245/40/17","245/40/18","245/45/18","245/55/18","245/60/18","245/65/17","245/70/17","245/75/17","245/80/17","255/55/18","255/65/17","255/65/18","255/70/17","265/40/18","265/60/17","265/60/18","265/65/17","265/65/18","265/70/17","265/70/18","275/65/18","275/70/18","285/65/17","285/70/17","285/75/18"].sort();
         
+        const displaySize = s => s ? s.replace(/\//g, ' ') : '';
+
         const VEHICLE_MAKES = ["Acura","Audi","BMW","Buick","Cadillac","Chevrolet","Chrysler","Dodge","Ford","GMC","Honda","Hyundai","Infiniti","Jeep","Kia","Lexus","Lincoln","Mazda","Mercedes-Benz","Mitsubishi","Nissan","Ram","Subaru","Tesla","Toyota","Volkswagen","Volvo"].sort();
         
         const VEHICLE_YEARS = Array.from({ length: 37 }, (_, i) => (2026 - i).toString());
@@ -292,7 +294,7 @@
                 const price = parseFloat(tirePrice); const qty = parseInt(tireQuantity);
                 if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) { alert('Please enter valid price and quantity'); return; }
                 const brandLabel = tireCondition === 'new' && tireBrand ? ` ${tireBrand}` : '';
-                const description = `${tireCondition.toUpperCase()} Tire${brandLabel} ${tireSize}`;
+                const description = `${tireCondition.toUpperCase()} Tire${brandLabel} ${displaySize(tireSize)}`;
                 const fromInventory = tireCondition === 'new' ? (tireSource === 'stock' ? 1 : 0) : 0;
                 setCartItems([...cartItems, { id: Date.now(), type: 'tire', condition: tireCondition, brand: tireBrand || null, fromInventory, description, size: tireSize, price, quantity: qty, total: price * qty, addToInventory }]);
                 setTireCondition(''); setTireSize(''); setTireBrand(''); setTireBrandSearch(''); setTireSource(''); setTirePrice(''); setTireQuantity('1'); setTireSizeSearch('');
@@ -449,7 +451,7 @@
                 const positionsText = tirePositions.length > 0 ? tirePositions.join(', ') : 'None';
                 let itemsText = '';
                 cartItems.forEach(item => {
-                    const desc = item.type === 'tire' ? `${item.condition.toUpperCase()} Tire ${item.size}` : item.description;
+                    const desc = item.type === 'tire' ? `${item.condition.toUpperCase()} Tire ${displaySize(item.size)}` : item.description;
                     itemsText += desc + '\n  $' + item.price.toFixed(2) + ' x ' + item.quantity + '               $' + item.total.toFixed(2) + '\n\n';
                 });
                 const rPM = ov.pm ?? paymentMethod;
