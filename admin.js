@@ -5,6 +5,9 @@
     var OWNER_ONLY = ['reports.html', 'transactions.html'];
     var SESS_KEY   = 'jts_sess';
 
+    // Clear the old localStorage-based auth so it can't bypass the new gate
+    localStorage.removeItem('jts_admin_v1');
+
     // ── Session API (available globally) ─────────────────────────────────────
     window.JTS_SESSION = {
         get: function () {
@@ -44,7 +47,8 @@
                     if (!sp) { location.href = 'pos.html?store=' + session.store; return; }
                 }
             }
-            return; // valid session — let the page load
+            injectSignOut(session);
+        return; // valid session — let the page load
         }
 
         // No session — redirect every non-index page back to login
@@ -55,6 +59,31 @@
         // index.html with no session — show login gate
         showGate();
     });
+
+    // ── Sign-out pill (injected on every authenticated page) ─────────────────
+    function injectSignOut(session) {
+        var page = location.pathname.split('/').pop() || 'index.html';
+        if (page === 'index.html') return; // index.html has its own header sign-out
+        if (document.getElementById('jts-signout')) return;
+        var label = session.role === 'owner' ? 'Owner' : (session.name + ' · Store #' + session.store);
+        var pill = document.createElement('div');
+        pill.id = 'jts-signout';
+        pill.style.cssText = [
+            'position:fixed;bottom:20px;right:20px;z-index:9999;',
+            'display:flex;align-items:center;gap:10px;',
+            'background:white;border:1px solid #e5e7eb;border-radius:999px;',
+            'padding:8px 14px 8px 12px;',
+            'box-shadow:0 2px 12px rgba(0,0,0,0.12);',
+            'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;',
+            'font-size:13px;color:#374151;'
+        ].join('');
+        pill.innerHTML =
+            '<span style="font-weight:600;">' + label + '</span>' +
+            '<button onclick="window.JTS_SESSION.clear()" style="' +
+            'background:#f3f4f6;border:none;border-radius:999px;' +
+            'padding:4px 10px;font-size:12px;font-weight:600;color:#374151;cursor:pointer;">Sign out</button>';
+        document.body.appendChild(pill);
+    }
 
     // ── Login Gate ───────────────────────────────────────────────────────────
     function showGate() {
