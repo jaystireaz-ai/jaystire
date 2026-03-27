@@ -379,22 +379,22 @@
         const [monthlyTireData, setMonthlyTireData] = useState([]);
         const [monthlyBrandData, setMonthlyBrandData] = useState([]);
 
-        const loadAll = useCallback(async () => {
+        // loadAll takes explicit params — no stale closures, no race conditions
+        const loadAll = useCallback(async (from, to, storeFilter) => {
             setLoading(true);
             setError(null);
 
-            // Build filtered params directly from deps — no external closure
             const p = new URLSearchParams();
-            if (dateFrom) p.append('date_from', dateFrom);
-            if (dateTo) p.append('date_to', dateTo);
-            if (store) p.append('store', store);
+            if (from) p.append('date_from', from);
+            if (to) p.append('date_to', to);
+            if (storeFilter) p.append('store', storeFilter);
             const q = p.toString();
 
             // Trend chart always uses last 12 months — independent of the date filter
             const trendQ = new URLSearchParams();
             trendQ.append('date_from', DEFAULT_FROM);
             trendQ.append('date_to', DEFAULT_TO);
-            if (store) trendQ.append('store', store);
+            if (storeFilter) trendQ.append('store', storeFilter);
 
             try {
                 const [trend, s, pm, svc, sizes, dow, monthly, tireCost, brands] = await Promise.all([
@@ -422,9 +422,10 @@
             } finally {
                 setLoading(false);
             }
-        }, [dateFrom, dateTo, store]);
+        }, []);
 
-        useEffect(() => { loadAll(); }, [loadAll]);
+        // Load once on mount with default 12-month range
+        useEffect(() => { loadAll(DEFAULT_FROM, DEFAULT_TO, ''); }, [loadAll]);
 
         return (
             <div className="min-h-screen bg-gray-50">
@@ -454,7 +455,7 @@
                             <span className="text-gray-400 text-sm">to</span>
                             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700" />
-                            <button onClick={loadAll} disabled={loading}
+                            <button onClick={() => loadAll(dateFrom, dateTo, store)} disabled={loading}
                                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 rounded-lg text-sm disabled:opacity-50">
                                 {loading ? '...' : 'Apply'}
                             </button>

@@ -197,7 +197,7 @@
 
         // Owner password
         function tryOwner() {
-            if (document.getElementById('jts-opw').value === OWNER_PASS) {
+            if (document.getElementById('jts-opw').value.trim() === OWNER_PASS) {
                 window.JTS_SESSION.set({ role: 'owner' });
                 document.getElementById('jts-gate').remove();
             } else {
@@ -211,7 +211,7 @@
 
         // Employee password
         function tryEmp() {
-            if (document.getElementById('jts-epw').value === EMP_PASS) {
+            if (document.getElementById('jts-epw').value.trim() === EMP_PASS) {
                 show('jts-s3');
             } else {
                 document.getElementById('jts-eerr').textContent = 'Incorrect password.';
