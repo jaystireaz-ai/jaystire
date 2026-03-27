@@ -28,9 +28,11 @@
     const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const SERVICE_LABELS = { used_tire: 'Used Tires', new_tire: 'New Tires', labor: 'Labor', alignment: 'Alignment', other: 'Other' };
     const SERVICE_COLORS = ['#2563eb','#16a34a','#f97316','#8b5cf6','#ec4899'];
+    const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     function fmt(n) { return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     function fmtK(n) { const v = Number(n || 0); return v >= 1000 ? `$${(v/1000).toFixed(1)}k` : `$${v.toFixed(0)}`; }
+    function fmtMonth(m) { const [y, mo] = m.split('-'); return `${MONTH_NAMES[parseInt(mo)-1]} '${y.slice(2)}`; }
 
     // ── Reusable chart canvas wrapper ─────────────────────────────────────────
     function ChartBox({ title, subtitle, children, fullWidth }) {
@@ -201,33 +203,73 @@
             : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
     }
 
-    function DailySalesChart({ data }) {
+    // Always-12-month trend chart — gradient area, monthly aggregated, ignores date filter
+    function TrendLineChart({ data, storeFilter }) {
         const ref = useRef(null);
-        const dates = [...new Set(data.map(d => d.transaction_date))].sort();
-        const datasets = [1, 2, 3].map(s => ({
-            label: `Store #${s}`,
-            data: dates.map(date => {
-                const row = data.find(d => d.transaction_date === date && d.store_number === s);
-                return row ? Number(row.revenue) : null;
-            }),
-            borderColor: STORE_COLORS[s],
-            backgroundColor: STORE_COLORS[s] + '22',
-            tension: 0.3, pointRadius: 0, borderWidth: 2, fill: false, spanGaps: true
-        }));
-        useChart(ref, data.length ? {
-            type: 'line',
-            data: { labels: dates, datasets },
-            options: {
-                responsive: true,
-                plugins: { legend: { position: 'top' }, datalabels: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { maxTicksLimit: 12, maxRotation: 0 } },
-                    y: { grid: { color: '#f3f4f6' }, ticks: { callback: v => fmtK(v) } }
+        const instance = useRef(null);
+
+        useEffect(() => {
+            if (!ref.current) return;
+            if (instance.current) { instance.current.destroy(); instance.current = null; }
+            if (!data.length) return;
+
+            const months = [...new Set(data.map(d => d.month))].sort();
+            const labels = months.map(fmtMonth);
+            const ctx = ref.current.getContext('2d');
+            const storeNums = storeFilter ? [parseInt(storeFilter)] : [1, 2, 3];
+
+            const datasets = storeNums.map(s => {
+                const color = STORE_COLORS[s];
+                const grad = ctx.createLinearGradient(0, 0, 0, 280);
+                grad.addColorStop(0, color + '44');
+                grad.addColorStop(1, color + '00');
+                return {
+                    label: `Store #${s}`,
+                    data: months.map(m => {
+                        const row = data.find(d => d.month === m && Number(d.store_number) === s);
+                        return row ? Number(row.revenue) : null;
+                    }),
+                    borderColor: color,
+                    backgroundColor: grad,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: color,
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    borderWidth: 2.5,
+                    fill: true,
+                    spanGaps: true
+                };
+            });
+
+            instance.current = new Chart(ref.current, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'circle', padding: 20, font: { size: 12 } } },
+                        datalabels: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            padding: 12,
+                            callbacks: { label: c => ` Store #${c.dataset.label.split('#')[1]}: $${fmt(c.parsed.y)}` }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+                        y: { grid: { color: '#f3f4f6' }, border: { display: false }, ticks: { callback: v => fmtK(v), color: '#9ca3af' } }
+                    }
                 }
-            }
-        } : null, [data]);
+            });
+
+            return () => { if (instance.current) { instance.current.destroy(); instance.current = null; } };
+        }, [data, storeFilter]);
+
         return data.length
-            ? <canvas ref={ref} style={{height: 240}}></canvas>
+            ? <canvas ref={ref} style={{height: 280}}></canvas>
             : <p className="text-gray-400 text-sm text-center py-8">No data</p>;
     }
 
@@ -327,8 +369,8 @@
         const [error, setError] = useState(null);
 
         const [summary, setSummary] = useState(null);
+        const [trendData, setTrendData] = useState([]);        // always last 12 months
         const [paymentData, setPaymentData] = useState([]);
-        const [dailyData, setDailyData] = useState([]);
         const [serviceData, setServiceData] = useState([]);
         const [tireSizeData, setTireSizeData] = useState([]);
         const [dowData, setDowData] = useState([]);
@@ -348,11 +390,18 @@
             setLoading(true);
             setError(null);
             const q = buildParams();
+
+            // Trend chart always uses last 12 months — independent of the date filter
+            const trendQ = new URLSearchParams();
+            trendQ.append('date_from', DEFAULT_FROM);
+            trendQ.append('date_to', DEFAULT_TO);
+            if (store) trendQ.append('store', store);
+
             try {
-                const [s, pm, daily, svc, sizes, dow, monthly, tireCost, brands] = await Promise.all([
+                const [trend, s, pm, svc, sizes, dow, monthly, tireCost, brands] = await Promise.all([
+                    fetch(`${API}/reports/monthly-revenue?${trendQ}`).then(r => r.json()),
                     fetch(`${API}/reports/summary?${q}`).then(r => r.json()),
                     fetch(`${API}/reports/payment-methods?${q}`).then(r => r.json()),
-                    fetch(`${API}/reports/daily-sales?${q}`).then(r => r.json()),
                     fetch(`${API}/reports/service-breakdown?${q}`).then(r => r.json()),
                     fetch(`${API}/reports/tire-sizes?${q}`).then(r => r.json()),
                     fetch(`${API}/reports/day-of-week?${q}`).then(r => r.json()),
@@ -360,9 +409,9 @@
                     fetch(`${API}/reports/monthly-tire-cost?${q}`).then(r => r.json()),
                     fetch(`${API}/reports/monthly-brands?${q}`).then(r => r.json()),
                 ]);
+                if (trend.success) setTrendData(trend.data);
                 if (s.success) setSummary(s.data);
                 if (pm.success) setPaymentData(pm.data);
-                if (daily.success) setDailyData(daily.data);
                 if (svc.success) setServiceData(svc.data);
                 if (sizes.success) setTireSizeData(sizes.data);
                 if (dow.success) setDowData(dow.data);
@@ -431,16 +480,25 @@
                     {/* Charts Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-                        {/* Daily Sales — full width */}
+                        {/* Trend line — always last 12 months, not affected by date filter */}
                         <div className="md:col-span-2">
-                            <ChartBox title="Daily Sales by Store" subtitle="Revenue" fullWidth>
-                                <DailySalesChart data={dailyData} />
-                            </ChartBox>
+                            <div className="bg-white border border-gray-200 rounded-2xl p-5">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-0.5">Revenue Trend</p>
+                                        <h3 className="text-base font-bold text-gray-900">Monthly Revenue by Store</h3>
+                                    </div>
+                                    <span className="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded-full px-3 py-1 mt-1">
+                                        Last 12 months · always shown
+                                    </span>
+                                </div>
+                                <TrendLineChart data={trendData} storeFilter={store} />
+                            </div>
                         </div>
 
-                        {/* Monthly Revenue — full width */}
+                        {/* Monthly Revenue bar — responds to filter */}
                         <div className="md:col-span-2">
-                            <ChartBox title="Monthly Revenue by Store" subtitle="Trend">
+                            <ChartBox title="Monthly Revenue by Store" subtitle="Filtered view">
                                 <MonthlyRevenueChart data={monthlyRevData} />
                             </ChartBox>
                         </div>
