@@ -62,8 +62,6 @@
 
     // ── Sign-out pill (injected on every authenticated page) ─────────────────
     function injectSignOut(session) {
-        var page = location.pathname.split('/').pop() || 'index.html';
-        if (page === 'index.html') return; // index.html has its own header sign-out
         if (document.getElementById('jts-signout')) return;
         var label = session.role === 'owner' ? 'Owner' : (session.name + ' · Store #' + session.store);
         var pill = document.createElement('div');
@@ -198,8 +196,10 @@
         // Owner password
         function tryOwner() {
             if (document.getElementById('jts-opw').value.trim() === OWNER_PASS) {
-                window.JTS_SESSION.set({ role: 'owner' });
+                var sess = { role: 'owner' };
+                window.JTS_SESSION.set(sess);
                 document.getElementById('jts-gate').remove();
+                injectSignOut(sess);
             } else {
                 document.getElementById('jts-oerr').textContent = 'Incorrect password.';
                 document.getElementById('jts-opw').value = '';
@@ -238,7 +238,8 @@
             b.onmouseenter = function () { this.style.background = '#e5e7eb'; };
             b.onmouseleave = function () { this.style.background = '#f3f4f6'; };
             b.onclick = function () {
-                window.JTS_SESSION.set({ role: 'employee', store: selectedStore, name: this.getAttribute('data-name') });
+                var sess = { role: 'employee', store: selectedStore, name: this.getAttribute('data-name') };
+                window.JTS_SESSION.set(sess);
                 location.href = 'pos.html?store=' + selectedStore;
             };
         });
